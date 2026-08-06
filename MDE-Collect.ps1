@@ -834,7 +834,108 @@ if (-not $GraphOnly) {
     }
 }
 
-# ================================================= 13 · MANUEL ALANLAR ====
+# ============================================ 13 · BULGU TASLAKLARI =======
+# Toplanan veriden esik degerlere gore taslak bulgu uretir. Severity/owner/tarih
+# danisman tarafindan gozden gecirilmelidir — bunlar oneri, karar degil.
+Write-Step 'Bulgu taslaklari uretiliyor'
+
+function NumOf {
+    param([string]$Key)
+    $v = $data.kpi[$Key]
+    if ($null -eq $v) { return $null }
+    $t = ([string]$v) -replace '[^\d\.\-]', ''
+    if ($t -eq '') { return $null }
+    try { return [double]$t } catch { return $null }
+}
+
+$findings = [System.Collections.Generic.List[object]]::new()
+function Add-Finding {
+    param([string]$Text, [string]$Domain, [string]$Severity)
+    $findings.Add([ordered]@{
+        id       = ''
+        finding  = $Text
+        domain   = $Domain
+        severity = $Severity
+        effort   = ''
+        owner    = ''
+        due      = ''
+        status   = 'Open'
+    })
+}
+
+$rate = NumOf 'Onboarding Rate'
+$gap  = NumOf 'Not onboarded'
+if ($null -ne $rate -and $rate -lt 95 -and $gap -gt 0) {
+    Add-Finding "$([int]$gap) cihaz Defender for Endpoint sensoru olmadan calisiyor (kapsam %$([int]$rate))" 'Deployment' 'High'
+}
+foreach ($k in 'Impaired comms', 'No sensor data') {
+    $n = NumOf $k
+    if ($n -gt 0) { Add-Finding "$([int]$n) cihaz onboarded gorunuyor ancak telemetri uretmiyor ($k)" 'Deployment' 'High' }
+}
+$tp = NumOf 'Tamper protection on'
+if ($null -ne $tp -and $tp -lt 100) { Add-Finding "Tamper protection cihazlarin yalnizca %$([int]$tp) uzerinde etkin" 'Protection' $(if ($tp -lt 50) { 'Critical' } else { 'High' }) }
+$rt = NumOf 'Real-time protection on'
+if ($null -ne $rt -and $rt -lt 100) { Add-Finding "Real-time protection cihazlarin %$([int]$rt) uzerinde etkin — kalan cihazlar korumasiz" 'Protection' 'Critical' }
+$cp = NumOf 'Cloud protection on'
+if ($null -ne $cp -and $cp -lt 100) { Add-Finding "Cloud-delivered protection cihazlarin %$([int]$cp) uzerinde etkin" 'Protection' 'High' }
+
+$blk = NumOf 'Rules in block mode'
+$aud = NumOf 'Rules in audit mode'
+if ($null -ne $blk -and $blk -lt 8) {
+    Add-Finding "ASR kurallarindan yalnizca $([int]$blk) tanesi block modunda$(if ($aud -gt 0) { ", $([int]$aud) tanesi audit modunda (goruyor ama engellemiyor)" })" 'ASR' 'High'
+}
+if ($data.tables.avExclusions -and $data.kpi['High-risk exclusions'] -gt 0) {
+    Add-Finding "$($data.kpi['High-risk exclusions']) adet yuksek riskli AV exclusion (surucu koku / kullanici yazabilir dizin / joker)" 'Protection' 'High'
+}
+
+$crit = NumOf 'Critical CVEs'
+if ($crit -gt 0) { Add-Finding "$([int]$crit) kritik CVE aktif olarak istismar edilebilir durumda" 'TVM' $(if ($crit -ge 20) { 'Critical' } else { 'High' }) }
+$exp = NumOf 'Exposure Score'
+if ($exp -gt 30) { Add-Finding "Exposure score $([int]$exp) — hedef degerin (30) uzerinde" 'TVM' 'Medium' }
+$ss = NumOf 'Secure score for devices'
+if ($null -ne $ss -and $ss -lt 70) { Add-Finding "Microsoft Secure Score %$([int]$ss) — cihaz yapilandirmasinda onemli bosluklar var" 'Governance' 'Medium' }
+
+if ($data.tables.secureConfiguration) {
+    $avgCfg = [math]::Round((@($data.tables.secureConfiguration) | Measure-Object compliance -Average).Average)
+    if ($avgCfg -lt 60) { Add-Finding "Guvenlik yapilandirma uyumu ortalama %$avgCfg — baseline uygulanmamis" 'Governance' 'High' }
+}
+if ($data.tables.conditionalAccess -and -not $data.tables.conditionalAccess[0].deviceRiskUsed) {
+    Add-Finding 'Cihaz uyumu/riski hicbir Conditional Access politikasinda kullanilmiyor' 'Integration' 'High'
+}
+$ga = @($data.tables.privilegedRoles | Where-Object { $_.role -eq 'Global Administrator' }).members
+if ($ga -gt 5) { Add-Finding "$ga adet kalici Global Administrator hesabi var (PIM disi)" 'Governance' 'High' }
+if ($null -ne $data.tables.customDetections -and @($data.tables.customDetections).Count -eq 0) {
+    Add-Finding 'Hic ozel tespit kurali tanimlanmamis' 'EDR' 'Low'
+}
+$open = NumOf 'Open / in progress'
+if ($open -gt 0) { Add-Finding "$([int]$open) uyari halen acik / islemde" 'EDR' 'Medium' }
+
+if ($findings.Count -gt 0) {
+    $i = 1
+    foreach ($f in $findings) { $f.id = 'F-{0:D2}' -f $i; $i++ }
+    $data.tables.findings = @($findings)
+
+    $sevOrder = 'Critical', 'High', 'Medium', 'Low'
+    $data.charts['Findings by severity'] = @(
+        $sevOrder | ForEach-Object {
+            $sv = $_
+            Write-Output -NoEnumerate @($sv, @($findings | Where-Object { $_.severity -eq $sv }).Count)
+        })
+    $data.charts['Findings by domain'] = @(
+        $findings | Group-Object domain | Sort-Object Count -Descending | ForEach-Object {
+            Write-Output -NoEnumerate @($_.Name, $_.Count)
+        })
+    $data.kpi['Critical Findings'] = @($findings | Where-Object { $_.severity -eq 'Critical' }).Count
+    $data.kpi['Critical'] = @($findings | Where-Object { $_.severity -eq 'Critical' }).Count
+    $data.kpi['High']     = @($findings | Where-Object { $_.severity -eq 'High' }).Count
+    $data.kpi['Medium']   = @($findings | Where-Object { $_.severity -eq 'Medium' }).Count
+    $data.kpi['Low']      = @($findings | Where-Object { $_.severity -eq 'Low' }).Count
+
+    Write-Ok "$($findings.Count) taslak bulgu uretildi"
+    $script:Warnings.Add("Bulgu kaydindaki $($findings.Count) satir esik degerlerden otomatik uretildi — severity, owner ve tarihleri gozden gecirin.")
+}
+
+# ================================================= 14 · MANUEL ALANLAR ====
 $data.manual = @(
     'Executive summary, risk statement ve tüm anlatım metinleri',
     'Bulgu kaydı: severity kararı, effort, owner, hedef tarih',

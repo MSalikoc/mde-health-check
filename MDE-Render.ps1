@@ -171,6 +171,202 @@ if ($d.tables.secureScoreActions) {
     }, 1)
 }
 
+# ============================================================================
+#  GENEL TABLO ESLEYICI
+#  Baslik altindaki tabloda satir etiketine gore hucreleri doldurur.
+#  Map: 'satir etiketi regex' -> @{ v = @('deger1','deger2'); status='pass'; sev='high' }
+#  v icindeki bos string o hucreye dokunmaz.
+# ============================================================================
+$ST_OPTS  = @(@('', 'Not assessed'), @('pass', 'Compliant'), @('partial', 'Partial'), @('fail', 'Non-compliant'), @('na', 'N/A'))
+$SEV_OPTS = @(@('', 'Severity'), @('critical', 'Critical'), @('high', 'High'), @('medium', 'Medium'), @('low', 'Low'))
+
+function New-Select {
+    param([string]$Class, $Opts, [string]$Value)
+    $o = ''
+    foreach ($pair in $Opts) {
+        $sel = if ($pair[0] -eq $Value) { ' selected' } else { '' }
+        $o += "<option value=`"$($pair[0])`"$sel>$($pair[1])</option>"
+    }
+    return "<select class=`"$Class`" data-v=`"$Value`">$o</select>"
+}
+
+function Strip-Tags {
+    param([string]$s)
+    return ([regex]::Replace($s, '<[^>]+>', ' ') -replace '&amp;', '&' -replace '\s+', ' ').Trim()
+}
+
+function Fill-Rows {
+    param(
+        [string]$Heading,     # tabloyu bulmak icin onundeki h3 metni (bos ise ilk tablo)
+        [hashtable]$Map
+    )
+    $anchor = if ($Heading) { [regex]::Escape($Heading) } else { '' }
+    # h3 basliginda class olabilir (<h3 class="mt0">...)
+    $rx = if ($Heading) {
+        [regex]("(?s)(<h3[^>]*>$anchor</h3>\s*<table class=`"t[^`"]*`">)(.*?)(</table>)")
+    } else { $null }
+    if (-not $rx -or -not $rx.IsMatch($script:html)) { return 0 }
+
+    $script:rowsFilled = 0
+    $script:html = $rx.Replace($script:html, {
+        param($m)
+        $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
+            param($rm)
+            $row = $rm.Value
+            if ($row -match '<th') { return $row }
+            $first = [regex]::Match($row, '(?s)<td[^>]*>(.*?)</td>')
+            if (-not $first.Success) { return $row }
+            $label = Strip-Tags $first.Groups[1].Value
+
+            $entry = $null
+            foreach ($k in $Map.Keys) {
+                if ($label -match $k) { $entry = $Map[$k]; break }
+            }
+            if (-not $entry) { return $row }
+
+            # secici hucreleri
+            if ($entry.status) {
+                $row = $row -replace '<td class="sel"></td>', ('<td class="sel">' + (New-Select 'st' $ST_OPTS $entry.status) + '</td>')
+            }
+            if ($entry.sev) {
+                $row = $row -replace '<td class="sev"></td>', ('<td class="sev">' + (New-Select 'sev' $SEV_OPTS $entry.sev) + '</td>')
+            }
+
+            # duzenlenebilir hucreler (sirayla)
+            if ($entry.v) {
+                $script:cellIdx = 0
+                $script:cellVals = @($entry.v)
+                $row = [regex]::Replace($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>', {
+                    param($cm)
+                    if ($script:cellIdx -ge $script:cellVals.Count) { return $cm.Value }
+                    $val = $script:cellVals[$script:cellIdx]
+                    $script:cellIdx++
+                    if ("$val" -eq '') { return $cm.Value }
+                    "<td$($cm.Groups[1].Value)>$val</td>"
+                })
+            }
+            $script:rowsFilled++
+            return $row
+        })
+        "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
+    }, 1)
+
+    $script:filled.rows += $script:rowsFilled
+    return $script:rowsFilled
+}
+
+$script:html = $html   # yardimci fonksiyonlar script kapsamini kullanir
+
+# ---------------------------------------------------------- BULGU KAYDI --
+if ($d.tables.findings) {
+    $map = @{}
+    foreach ($f in $d.tables.findings) {
+        $sev = if ($f.severity) { $f.severity.ToLower() } else { '' }
+        $st = switch ($f.status) {
+            'Open'        { 'fail' }
+            'In progress' { 'partial' }
+            'Accepted'    { 'na' }
+            default       { 'fail' }
+        }
+        $map["^$([regex]::Escape($f.id))$"] = @{
+            v      = @($f.finding, $f.domain, $f.effort, $f.owner, $f.due)
+            sev    = $sev
+            status = $st
+        }
+    }
+    $n = Fill-Rows -Heading '' -Map $map
+    # Bulgu kaydinda h3 basligi yok; tabloyu ID sutunundan bul
+    $script:findingMap = $map
+    $script:html = [regex]::Replace($script:html, '(?s)(<tr><td>F-\d\d</td>.*?</tr>)', {
+        param($rm)
+        $row = $rm.Value
+        $id = [regex]::Match($row, '<td>(F-\d\d)</td>').Groups[1].Value
+        $key = "^$([regex]::Escape($id))$"
+        if (-not $script:findingMap.ContainsKey($key)) { return $row }
+        $e = $script:findingMap[$key]
+        $row = $row -replace '<td class="sev"></td>', ('<td class="sev">' + (New-Select 'sev' $SEV_OPTS $e.sev) + '</td>')
+        $row = $row -replace '<td class="sel"></td>', ('<td class="sel">' + (New-Select 'st' $ST_OPTS $e.status) + '</td>')
+        $script:cellIdx = 0
+        $script:cellVals = @($e.v)
+        $row = [regex]::Replace($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>', {
+            param($cm)
+            if ($script:cellIdx -ge $script:cellVals.Count) { return $cm.Value }
+            $val = $script:cellVals[$script:cellIdx]
+            $script:cellIdx++
+            if ("$val" -eq '') { return $cm.Value }
+            "<td$($cm.Groups[1].Value)>$val</td>"
+        })
+        $script:filled.rows++
+        return $row
+    })
+}
+
+# ------------------------------------------------------ LISANS ENVANTERI -
+if ($d.tables.licenses) {
+    $map = @{}
+    foreach ($l in $d.tables.licenses) {
+        $key = [regex]::Escape($l.sku)
+        $map[$key] = @{ v = @("$($l.purchased)", "$($l.assigned)", "$($l.assigned)", "$($l.available)", "$($l.partNumber)") }
+    }
+    Fill-Rows -Heading 'License Inventory' -Map $map | Out-Null
+}
+
+# --------------------------------------------------------- RBAC ROLLERI --
+if ($d.tables.privilegedRoles) {
+    $map = @{}
+    foreach ($r in $d.tables.privilegedRoles) {
+        $map[[regex]::Escape($r.role)] = @{
+            v      = @('', "$($r.members)", '')
+            status = $(if ($r.role -eq 'Global Administrator' -and $r.members -gt 5) { 'fail' } else { 'partial' })
+        }
+    }
+    Fill-Rows -Heading 'Role-Based Access Control' -Map $map | Out-Null
+}
+
+# ------------------------------------------------------------- SOC KPI ---
+if ($d.tables.socKpi) {
+    $map = @{}
+    foreach ($k in $d.tables.socKpi) {
+        $map[[regex]::Escape($k.metric)] = @{ v = @("$($k.observed)", '') }
+    }
+    Fill-Rows -Heading 'Operational KPIs' -Map $map | Out-Null
+}
+
+# ------------------------------------------------- EXCLUSION HIJYENI -----
+if ($d.tables.avExclusions) {
+    $all = @($d.tables.avExclusions)
+    $paths = @($all | Where-Object { $_.value -match '\\' })
+    $exts  = @($all | Where-Object { $_.value -match '^\*?\.\w+$' })
+    $procs = @($all | Where-Object { $_.value -match '\.exe$' })
+    $risky = @($all | Where-Object { $_.value -match '^\w:\\?$|\*|AppData|Temp|Users\\' })
+    Fill-Rows -Heading 'Exclusion Hygiene' -Map @{
+        'Path exclusions'      = @{ v = @("$($paths.Count)", "$($risky.Count)", '') ; status = $(if ($risky.Count) { 'fail' } else { 'pass' }) }
+        'Extension exclusions' = @{ v = @("$($exts.Count)", '0', '') }
+        'Process exclusions'   = @{ v = @("$($procs.Count)", '0', '') }
+    } | Out-Null
+}
+
+# ------------------------------------------- OZEL TESPIT KURALLARI -------
+if ($d.tables.customDetections -and @($d.tables.customDetections).Count -gt 0) {
+    $rules = @($d.tables.customDetections)
+    $script:cdIdx = 0
+    $rx = [regex]'(?s)(<h3>Custom Detection Rule Inventory</h3>\s*<table class="t compact">.*?<tbody>)(.*?)(</tbody>)'
+    $script:html = $rx.Replace($script:html, {
+        param($m)
+        $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
+            param($rm)
+            if ($script:cdIdx -ge $rules.Count) { return $rm.Value }
+            $r = $rules[$script:cdIdx]; $script:cdIdx++
+            $script:filled.rows++
+            $sev = if ($r.severity) { $r.severity.ToLower() } else { '' }
+            "<tr><td class=`"f`" contenteditable data-ph=`"––`">$(Esc $r.name)</td><td class=`"f`" contenteditable data-ph=`"––`">$(Esc $r.frequency)</td><td class=`"sev`">$(New-Select 'sev' $SEV_OPTS $sev)</td><td class=`"f`" contenteditable data-ph=`"––`">$(Esc $r.actions)</td><td class=`"f`" contenteditable data-ph=`"––`"></td></tr>"
+        })
+        "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
+    }, 1)
+}
+
+$html = $script:html
+
 # ------------------------------------------------------- KAPAK ALANLARI --
 $cover = @{
     '[Client / Organization Name]' = if ($ClientName) { $ClientName } else { $d.meta.tenantName }
