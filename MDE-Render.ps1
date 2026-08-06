@@ -203,7 +203,8 @@ function Fill-Rows {
     $anchor = if ($Heading) { [regex]::Escape($Heading) } else { '' }
     # h3 basliginda class olabilir (<h3 class="mt0">...)
     $rx = if ($Heading) {
-        [regex]("(?s)(<h3[^>]*>$anchor</h3>\s*<table class=`"t[^`"]*`">)(.*?)(</table>)")
+        # baslik ile tablo arasinda aciklama paragrafi olabilir; baska h3'e gecmeden ilk tabloyu al
+        [regex]("(?s)(<h3[^>]*>$anchor</h3>(?:(?!<h3).)*?<table class=`"t[^`"]*`">)(.*?)(</table>)")
     } else { $null }
     if (-not $rx -or -not $rx.IsMatch($script:html)) { return 0 }
 
@@ -232,9 +233,10 @@ function Fill-Rows {
                 $row = $row -replace '<td class="sev"></td>', ('<td class="sev">' + (New-Select 'sev' $SEV_OPTS $entry.sev) + '</td>')
             }
 
-            # duzenlenebilir hucreler (sirayla)
+            # duzenlenebilir hucreler (sirayla); entry.draft ise REVIEW isaretli
             if ($entry.v) {
                 $script:cellIdx = 0
+                $script:cellDraft = [bool]$entry.draft
                 $script:cellVals = @($entry.v)
                 $row = [regex]::Replace($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>', {
                     param($cm)
@@ -242,7 +244,8 @@ function Fill-Rows {
                     $val = $script:cellVals[$script:cellIdx]
                     $script:cellIdx++
                     if ("$val" -eq '') { return $cm.Value }
-                    "<td$($cm.Groups[1].Value)>$val</td>"
+                    $inner = if ($script:cellDraft) { "<span class=`"draft`">$val</span>" } else { "$val" }
+                    "<td$($cm.Groups[1].Value)>$inner</td>"
                 })
             }
             $script:rowsFilled++
@@ -759,6 +762,55 @@ $bp = [ordered]@{
     'Network protection / web filtering' = 'Evidenced by network protection mode and web content filtering policy coverage.'
     'Security awareness'                 = 'Endpoint findings that trace to user behaviour belong in the awareness programme, not only in technical remediation.'
 }
+
+# ---------------------------------------------------- BOLUM 01 TABLOLARI --
+# In Scope: cihaz envanterinden kategori bazinda topla
+if ($d.tables.deviceInventory) {
+    $inv = @($d.tables.deviceInventory)
+    function ScopeText {
+        param([string]$Pattern)
+        $rows = @($inv | Where-Object { $_.platform -match $Pattern })
+        if ($rows.Count -eq 0) { return 'None discovered' }
+        $tot = ($rows | Measure-Object discovered -Sum).Sum
+        $onb = ($rows | Measure-Object onboarded -Sum).Sum
+        $names = ($rows | ForEach-Object { $_.platform }) -join ', '
+        return "$tot discovered / $onb onboarded - $names"
+    }
+    Fill-Rows -Heading 'In Scope' -Map @{
+        '^Windows clients'   = @{ v = @((ScopeText 'Windows 1[01]')) }
+        '^Windows servers'   = @{ v = @((ScopeText 'Windows Server')) }
+        '^macOS'             = @{ v = @((ScopeText 'macOS')) }
+        '^Linux'             = @{ v = @((ScopeText 'Linux')) }
+        'Mobile'             = @{ v = @((ScopeText 'iOS|Android')) }
+        'Network / IoT / OT' = @{ draft = $true; v = @('Device discovery only - not onboarded; confirm whether OT segments are in scope') }
+    } | Out-Null
+}
+
+# Data Sources Used: neyin nereden geldigi
+$ahTables = 'DeviceInfo, DeviceEvents, DeviceTvmSoftwareVulnerabilities, DeviceTvmSecureConfigurationAssessment, DeviceTvmSoftwareInventory, AlertInfo'
+$polCount = if ($d.tables.intunePolicies) { @($d.tables.intunePolicies).Count } else { 0 }
+Fill-Rows -Heading 'Data Sources Used' -Map @{
+    'Microsoft Defender portal' = @{ v = @(
+        'Device inventory, secure configuration assessment, exposure and recommendations (read via API)',
+        "Collected $($d.meta.generatedUtc) UTC") }
+    'Advanced Hunting' = @{ v = @($ahTables, "$($d.meta.eventWindow) event window, $($d.meta.alertWindow) alert window") }
+    'Microsoft Intune' = @{ v = @('Endpoint security and configuration policies with assignments, antivirus exclusions',
+        "$polCount configuration policies read") }
+    'Group Policy / MECM' = @{ draft = $true; v = @('Not readable through the API',
+        'Request a GPO report if any protection setting is managed outside Intune') }
+    'Microsoft Secure Score' = @{ v = @('Tenant score, control breakdown and recommended actions',
+        "$(if ($d.meta.secureScore) { "Score $($d.meta.secureScore)" } else { 'Not available' })") }
+    'Microsoft Sentinel / SIEM' = @{ draft = $true; v = @('Connector state not read by this collection',
+        'Confirm connector health and ingestion volume with the SOC') }
+} | Out-Null
+
+# Severity Definitions: standart tanimlar
+Fill-Rows -Heading 'Severity Definitions' -Map @{
+    '^Critical' = @{ draft = $true; v = @('Exploitable now with no compensating control, or protection is absent on production systems. Remediate immediately.') }
+    '^High'     = @{ draft = $true; v = @('Significant exposure with a realistic attack path; a compensating control may exist but is partial. Remediate within 30 days.') }
+    '^Medium'   = @{ draft = $true; v = @('Moderate risk or a control operating below its intended effectiveness. Remediate within 90 days.') }
+    '^Low'      = @{ draft = $true; v = @('Hardening or optimisation opportunity with limited immediate risk. Schedule into routine work.') }
+} | Out-Null
 
 # best practice yorumlarini satirin SON bos duzenlenebilir hucresine yaz
 $script:bpCount = 0

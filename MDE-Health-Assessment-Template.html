@@ -122,8 +122,11 @@ b,strong{color:var(--navy)}
   color:#A9B2BF;font-style:italic;font-weight:400;
 }
 body.guides .f:empty{
-  outline:1px dashed #C3CBD8;outline-offset:1px;border-radius:2px;min-width:26px;display:inline-block;
+  outline:1px dashed #C3CBD8;outline-offset:1px;border-radius:2px;
+  /* inline-block + uzun yer tutucu metni hucreden tasiyordu; inline kalsin ki sarsin */
+  display:inline;
 }
+.f:empty:before{overflow-wrap:anywhere}
 body.guides .f{background:rgba(27,77,228,.035)}
 .f{min-width:14px}
 
@@ -2504,7 +2507,7 @@ function toggleToc(){document.getElementById('toc').classList.toggle('on');}
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-06-review';
+const DOCVER='2026-08-06-r2';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
