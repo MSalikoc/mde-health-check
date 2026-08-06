@@ -45,7 +45,21 @@ Script çalıştırma politikası kapalıysa, **sadece bu oturum için** açın 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 ```
 
-## 3 · Çalıştırın
+## 3 · Ön adım: Entra app kaydı (bir kez)
+
+Varsayılan ClientId'nin Defender izinleri yoktur — onunla çalıştırırsanız her çağrı `403` döner. Aşağıdaki script app kaydını oluşturur, public client ayarını yapar, izinleri ekler ve **admin consent'i de verir**:
+
+```powershell
+.\New-MdeApp.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6
+```
+
+Cihaz kodu ile **Global Administrator** hesabıyla giriş yapın. Sonuç `.mde-app.json` dosyasına yazılır; `Run-Assessment.ps1` bu dosyayı otomatik okur, ayrıca `-ClientId` yazmanıza gerek kalmaz.
+
+Tek komutta hem app kaydı hem toplama isterseniz: `Run-Assessment.ps1 ... -CreateApp`
+
+> Bu adımı yalnızca bir kez yapmanız yeterli. Script idempotent — tekrar çalıştırırsanız var olan kaydı bulur, eksik izinleri tamamlar.
+
+## 4 · Çalıştırın
 
 Tek komut — toplar, raporu üretir, tarayıcıda açar:
 

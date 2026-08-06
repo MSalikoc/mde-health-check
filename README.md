@@ -17,6 +17,18 @@ Aradaki JSON kasıtlı: script'in çekemediği alanları elle JSON'a yazıp rend
 
 ## Kullanım
 
+### 0 · Ön adım: Entra app kaydı (bir kez)
+
+Varsayılan ClientId Defender izinlerine sahip değildir; onunla her çağrı `403` döner. Bu script app kaydını oluşturur, public client ayarını yapar, izinleri ekler ve admin consent'i verir:
+
+```bash
+pwsh ./New-MdeApp.ps1 -TenantId contoso.onmicrosoft.com
+```
+
+Global Administrator hesabıyla giriş yapılmalıdır. Sonuç `.mde-app.json` dosyasına yazılır ve `Run-Assessment.ps1` tarafından otomatik okunur. Script idempotent — tekrar çalıştırıldığında var olan kaydı bulup eksik izinleri tamamlar.
+
+### 1 · Toplama ve rapor
+
 ```bash
 pwsh ./MDE-Collect.ps1 -TenantId contoso.onmicrosoft.com -OutFile ./mde-data.json
 ```

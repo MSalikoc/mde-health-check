@@ -52,10 +52,14 @@ foreach ($file in (Get-ChildItem -Path $Path -Filter '*.ps1' | Sort-Object Name)
     # Akilli tirnak uyarisi: PowerShell U+2018/2019/201C/201D karakterlerini de
     # string sinirlayicisi sayar; Turkce kesme isareti olarak kullanilirsa
     # string'i erken kapatir ve tum dosyanin tirnak eslesmesi kayar.
+    # NOT: karakterler kod noktasiyla yaziliyor — bu dosyanin kendisi de
+    # akilli tirnak icermesin diye (aksi halde kendi kendini bozar).
     $raw = Get-Content -Path $file.FullName -Raw
-    $smart = [regex]::Matches($raw, '[‘’“”]')
-    if ($smart.Count -gt 0) {
-        Write-Host "       ! $($smart.Count) adet akilli tirnak var — duz tirnakla degistirin" -ForegroundColor Yellow
+    $smartChars = @([char]0x2018, [char]0x2019, [char]0x201C, [char]0x201D)
+    $smartCount = @($raw.ToCharArray() | Where-Object { $smartChars -contains $_ }).Count
+    if ($smartCount -gt 0) {
+        Write-Host "       ! $smartCount adet akilli tirnak var - duz tirnakla degistirin" -ForegroundColor Yellow
+        Write-Host '         (PowerShell bunlari string sinirlayicisi sayar)' -ForegroundColor DarkYellow
     }
 }
 

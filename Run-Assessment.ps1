@@ -23,7 +23,8 @@ param(
     [int]$AlertDays = 90,
     [int]$EventDays = 30,
     [string]$Template,
-    [switch]$SkipCollect          # elde JSON varsa sadece raporu üret
+    [switch]$SkipCollect,         # elde JSON varsa sadece raporu üret
+    [switch]$CreateApp            # ön adım: Entra app kaydını oluştur/güncelle
 )
 
 $ErrorActionPreference = 'Stop'
@@ -70,6 +71,32 @@ $pol = Get-ExecutionPolicy
 if ($pol -in 'Restricted', 'AllSigned') {
     Write-Host "  ! Execution policy: $pol — bu oturum için geçici olarak gevşetiliyor" -ForegroundColor Yellow
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+}
+
+# ------------------------------------------------------- APP KAYDI (0/2) --
+$appFile = Join-Path $root '.mde-app.json'
+
+if ($CreateApp) {
+    Write-Host ''
+    Write-Host ' 0/2 · Entra app kaydı' -ForegroundColor White
+    & (Join-Path $root 'New-MdeApp.ps1') -TenantId $TenantId -OutFile $appFile | Out-Null
+}
+
+if (-not $ClientId -and (Test-Path $appFile)) {
+    try {
+        $saved = Get-Content $appFile -Raw -Encoding utf8 | ConvertFrom-Json
+        if ($saved.clientId) {
+            $ClientId = $saved.clientId
+            Write-Host "  ✓ App kaydı bulundu (.mde-app.json): $ClientId" -ForegroundColor Green
+        }
+    } catch { }
+}
+
+if (-not $ClientId) {
+    Write-Host '  ! -ClientId verilmedi ve .mde-app.json yok.' -ForegroundColor Yellow
+    Write-Host '    Varsayılan ClientId Defender izinlerine sahip değildir; çağrılar 403 dönebilir.' -ForegroundColor Yellow
+    Write-Host "    Önce şunu çalıştırın:  .\New-MdeApp.ps1 -TenantId $TenantId" -ForegroundColor Yellow
+    Write-Host ''
 }
 
 # --------------------------------------------------------------- TOPLA ---
