@@ -162,12 +162,14 @@ function Invoke-Api {
         [ValidateSet('graph', 'mde')][string]$Api = 'graph',
         [string]$Method = 'GET',
         $Body,
-        [switch]$All          # @odata.nextLink takibi
+        [switch]$All,         # @odata.nextLink takibi
+        [int]$MaxPages = 200  # sayfalama ust siniri
     )
     $headers = @{ Authorization = "Bearer $(Get-Token -Api $Api)"; 'Content-Type' = 'application/json' }
     $items = [System.Collections.Generic.List[object]]::new()
     $next = $Uri
     $attempt = 0
+    $page = 0
 
     while ($next) {
         try {
@@ -195,7 +197,8 @@ function Invoke-Api {
         $attempt = 0
 
         if ($null -ne $r.value) { $items.AddRange(@($r.value)) } else { return $r }
-        $next = if ($All) { $r.'@odata.nextLink' } else { $null }
+        $page++
+        $next = if ($All -and $page -lt $MaxPages) { $r.'@odata.nextLink' } else { $null }
     }
     return $items
 }
@@ -284,9 +287,16 @@ if ($skus) {
         }
     }
     $data.tables.licenses = @($rows | Where-Object { $map.ContainsKey($_.partNumber) -or $_.assigned -gt 0 } | Sort-Object -Property assigned -Descending)
+    # Once Defender SKU'lari; tenant'ta yoksa en cok atanan 5 SKU'ya dus
+    $chartRows = @($data.tables.licenses | Where-Object { $map.ContainsKey($_.partNumber) -and $_.assigned -gt 0 })
+    if ($chartRows.Count -eq 0) {
+        $chartRows = @($data.tables.licenses | Where-Object { $_.assigned -gt 0 } | Select-Object -First 5)
+        if ($chartRows.Count -gt 0) { Write-Skip 'Defender SKU bulunamadi — lisans grafigi en cok atanan SKU lara gore dolduruldu.' }
+    }
     $data.charts['License distribution'] = @(
-        $data.tables.licenses | Where-Object { $map.ContainsKey($_.partNumber) } | Select-Object -First 5 |
-        ForEach-Object { , @($_.sku, [int]$_.assigned) })
+        $chartRows | Select-Object -First 5 | ForEach-Object {
+            Write-Output -NoEnumerate @($_.sku, [int]$_.assigned)
+        })
     Write-Ok "$($data.tables.licenses.Count) SKU"
 }
 
@@ -327,9 +337,15 @@ if ($inv.Count) {
     $data.charts['Sensor health distribution'] = @($sh | ForEach-Object { , @($_.state, [int]$_.devices) })
     $healthy = ($sh | Where-Object state -eq 'Active' | Measure-Object devices -Sum).Sum
     $data.kpi['Sensor health']    = "$(Pct $healthy $onb)%"
-    $data.kpi['Impaired comms']   = '{0:N0}' -f (($sh | Where-Object state -match 'Impaired' | Measure-Object devices -Sum).Sum)
-    $data.kpi['No sensor data']   = '{0:N0}' -f (($sh | Where-Object state -match 'No sensor|Misconfigured' | Measure-Object devices -Sum).Sum)
-    $data.kpi['Inactive devices'] = '{0:N0}' -f (($sh | Where-Object state -eq 'Inactive' | Measure-Object devices -Sum).Sum)
+    # Ilgili durum hic yoksa Sum null doner — 0 olarak yaz, alan bos kalmasin
+    function SumState {
+        param($Pattern)
+        $v = ($sh | Where-Object { $_.state -match $Pattern } | Measure-Object devices -Sum).Sum
+        if ($null -eq $v) { 0 } else { $v }
+    }
+    $data.kpi['Impaired comms']   = '{0:N0}' -f (SumState 'Impaired')
+    $data.kpi['No sensor data']   = '{0:N0}' -f (SumState 'No sensor|Misconfigured')
+    $data.kpi['Inactive devices'] = '{0:N0}' -f (SumState '^Inactive$')
     $data.kpi['Inactive &gt; 7 days'] = $data.kpi['Inactive devices']
 
     Write-Ok "$total cihaz, $onb onboarded (%$(Pct $onb $total))"
@@ -603,8 +619,14 @@ if ($alerts) {
 }
 
 $inc = Try-Api {
-    Invoke-Api -All -Uri ("https://graph.microsoft.com/v1.0/security/incidents?`$filter=createdDateTime%20ge%20$since&`$top=200")
+    # NOT: incidents ucnda $top=200 ve createdDateTime filtresi 400 dondurur.
+    # Sayfalama ile cekip tarihi istemci tarafinda suzuyoruz.
+    Invoke-Api -All -MaxPages 10 -Uri 'https://graph.microsoft.com/v1.0/security/incidents?$top=50'
 } 'incidents'
+if ($inc) {
+    $sinceDt = (Get-Date).AddDays(-$AlertDays)
+    $inc = @($inc | Where-Object { $_.createdDateTime -and [datetime]$_.createdDateTime -ge $sinceDt })
+}
 if ($inc) {
     $data.kpi['Incidents (90d)'] = '{0:N0}' -f @($inc).Count
     $byMonth = @($inc) | Group-Object { ([datetime]$_.createdDateTime).ToString('yyyy-MM') } | Sort-Object Name
@@ -669,19 +691,71 @@ if ($pol) {
     })
     Write-Ok "$(@($pol).Count) yapılandırma politikası"
 
-    # AV exclusion ayarlarını politika içinden çıkar
+    # AV exclusion'lari ve ASR kural modlarini politika ayarlarindan cikar
     $exclusions = [System.Collections.Generic.List[object]]::new()
-    foreach ($p in @($pol | Where-Object { $_.templateReference.templateDisplayName -match 'Antivirus|Defender' })) {
+    $asrModes = @{}   # kural id -> mod
+
+    function Get-AsrMode {
+        param([string]$Value)
+        $v = $Value.ToLower()
+        if ($v -match '_(block|blocked)$' -or $v -match '_1$') { return 'Block' }
+        if ($v -match '_(audit|auditmode)$' -or $v -match '_2$') { return 'Audit' }
+        if ($v -match '_(warn)$' -or $v -match '_6$') { return 'Warn' }
+        if ($v -match '_(off|disable|disabled|notconfigured)$' -or $v -match '_0$') { return 'Disabled' }
+        return $null
+    }
+
+    $polScope = @($pol | Where-Object {
+        $_.templateReference.templateDisplayName -match 'Antivirus|Defender|Attack Surface' -or
+        $_.name -match 'Antivirus|Defender|ASR|Attack Surface'
+    })
+
+    foreach ($p in $polScope) {
         $settings = Try-Api { Invoke-Api -All -Uri "https://graph.microsoft.com/beta/deviceManagement/configurationPolicies('$($p.id)')/settings" } "policy settings $($p.name)"
         foreach ($s in @($settings)) {
             $json = $s | ConvertTo-Json -Depth 20
+
             if ($json -match 'excluded(path|extension|process)') {
                 foreach ($m in [regex]::Matches($json, '"value"\s*:\s*"([^"]{3,})"')) {
                     $v = $m.Groups[1].Value
                     if ($v -match '\\|\.\w{2,4}$') { $exclusions.Add([ordered]@{ policy = $p.name; value = $v }) }
                 }
             }
+
+            # ASR kural modlari: ayar id'si kural adini, secilen deger modu tasir
+            if ($json -match 'attacksurfacereduction|asr_rules|block(office|executable|credential|persistence|process|untrusted|webshell|win32|javascript|adobe)') {
+                foreach ($m in [regex]::Matches($json, '"value"\s*:\s*"([^"]*defender[^"]*)"')) {
+                    $v = $m.Groups[1].Value
+                    $mode = Get-AsrMode -Value $v
+                    if ($mode) {
+                        $ruleId = ($v -replace '_(block|blocked|audit|auditmode|warn|off|disable|disabled|notconfigured|\d)$', '')
+                        $asrModes[$ruleId] = $mode
+                    }
+                }
+            }
         }
+    }
+
+    # Telemetride olay uretmeyen kurallar gorunmez; Intune yapilandirmasi daha guvenilir
+    if ($asrModes.Count -gt 0) {
+        $data.tables.asrRules = @($asrModes.GetEnumerator() | Sort-Object Name | ForEach-Object {
+            [ordered]@{ rule = ($_.Key -split '_')[-1]; settingId = $_.Key; mode = $_.Value }
+        })
+        $blk = @($asrModes.Values | Where-Object { $_ -eq 'Block' }).Count
+        $aud = @($asrModes.Values | Where-Object { $_ -eq 'Audit' }).Count
+        $wrn = @($asrModes.Values | Where-Object { $_ -eq 'Warn' }).Count
+        $off = [math]::Max(0, 20 - $blk - $aud - $wrn)
+
+        $data.kpi['Rules in block mode'] = $blk
+        $data.kpi['Rules in audit mode'] = $aud
+        $data.kpi['Not configured'] = $off
+        $data.charts['ASR rule mode distribution'] = @(
+            @('Block', $blk),
+            @('Audit', $aud),
+            @('Warn', $wrn),
+            @('Not configured', $off))
+        Write-Ok "ASR modlari Intune'dan alindi: $blk block, $aud audit, $wrn warn"
+        $script:Warnings.Add("ASR modlari Intune politikalarindan turetildi ($($asrModes.Count) kural); GPO ile yonetilen kurallar gorunmez.")
     }
     if ($exclusions.Count) {
         $data.tables.avExclusions = @($exclusions | Sort-Object value -Unique)
