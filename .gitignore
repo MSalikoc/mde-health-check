@@ -1,0 +1,11 @@
+# Toplanan tenant verisi — asla commit edilmemeli
+mde-assessment-data.json
+smoke.json
+raw/
+
+# Üretilen raporlar (müşteri verisi içerir)
+*-MDE-Assessment-*.html
+*.pdf
+
+.DS_Store
+Thumbs.db

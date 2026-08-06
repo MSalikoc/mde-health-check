@@ -1,0 +1,111 @@
+{
+  "meta": {
+    "generatedUtc": "2026-06-27 09:14:22Z",
+    "tenantId": "northwindholding.onmicrosoft.com",
+    "tenantName": "Northwind Holding A.S.",
+    "verifiedDomain": "northwindholding.onmicrosoft.com",
+    "alertWindow": "90 days",
+    "eventWindow": "30 days",
+    "collector": "MDE-Collect.ps1 v1.0 (sample data)",
+    "secureScore": "61.4 / 100",
+    "configurationScore": 61,
+    "pimEligibleAssignments": 0,
+    "warnings": [
+      "ASR: hic olay uretmeyen kurallar telemetride gorunmez - mod tablosunu Intune politika export ile dogrulayin.",
+      "Threat Analytics durumu API ile alinamaz - portaldan elle doldurun."
+    ]
+  },
+  "kpi": {
+    "Total Endpoints": "3,322",
+    "Onboarded Devices": "3,014",
+    "Can Be Onboarded": "308",
+    "Onboarding Rate": "91%",
+    "Total in scope": "3,322",
+    "Onboarded": "3,014",
+    "Not onboarded": "308",
+    "Inactive &gt; 7 days": "147",
+    "Sensor health": "89%",
+    "Impaired comms": "112",
+    "No sensor data": "61",
+    "Inactive devices": "147",
+    "Real-time protection on": "97%",
+    "Cloud protection on": "93%",
+    "Tamper protection on": "78%",
+    "Rules in block mode": 6,
+    "Rules in audit mode": 11,
+    "Exposure Score": 38,
+    "Exposure score": 38,
+    "Secure score for devices": "61%",
+    "Total vulnerabilities": "8,412",
+    "Critical CVEs": "96",
+    "Software products": "1,106",
+    "Total alerts (90d)": "1,247",
+    "Incidents (90d)": "214",
+    "Resolved": "968",
+    "Open / in progress": "279",
+    "Malicious URLs blocked": "3,180"
+  },
+  "charts": {
+    "Endpoint onboarding coverage": [["Onboarding %", 91]],
+    "Microsoft Secure Score (devices)": [["Secure Score %", 61]],
+    "Overall configuration compliance": [["Compliance %", 67]],
+    "Device breakdown by platform": [["Windows11", 1596], ["Windows10", 664], ["WindowsServer", 510], ["macOS", 64], ["Linux", 84], ["VDI", 96]],
+    "Sensor health distribution": [["Active", 2694], ["Inactive", 147], ["Misconfigured - impaired comms", 112], ["Misconfigured - no sensor data", 61]],
+    "License distribution": [["Defender for Endpoint Plan 2", 1834], ["Defender for Endpoint Plan 1", 1180], ["Defender for Servers", 198]],
+    "Vulnerabilities by severity": [["Critical", 96], ["High", 1842], ["Medium", 4930], ["Low", 1544]],
+    "ASR rule mode distribution": [["Block", 6], ["Audit", 11], ["Warn", 1], ["Not configured", 2]],
+    "Top audited attack vectors (30 days)": [["OfficeMacroWin32ApiCalls", 14820], ["LsassCredentialTheft", 9640], ["ObfuscatedScript", 6215], ["PsexecWmiChildProcess", 3980], ["UntrustedUsbProcess", 1120]],
+    "Compliance by baseline profile (%)": [["Antivirus", 74], ["Attack Surface Reduction", 52], ["Security Controls", 61], ["Network Assessment", 82], ["OS", 69]],
+    "Alert severity breakdown": [["High", 86], ["Medium", 402], ["Low", 611], ["Informational", 148]],
+    "Alert status breakdown": [["Resolved", 968], ["In progress", 173], ["New", 106]],
+    "Alerts by detection category (MITRE tactic)": [["InitialAccess", 248], ["Execution", 196], ["Persistence", 84], ["PrivilegeEscalation", 62], ["DefenseEvasion", 171], ["CredentialAccess", 118], ["Discovery", 142], ["LateralMovement", 97], ["CommandAndControl", 129]],
+    "Incident volume by month": [["2026-01", 58], ["2026-02", 64], ["2026-03", 71], ["2026-04", 66], ["2026-05", 79], ["2026-06", 74]],
+    "Malware detections by category (last 30 days)": [["Malware", 214], ["Ransomware", 9], ["UnwantedSoftware", 386], ["Exploit", 41], ["CredentialAccess", 27], ["SuspiciousActivity", 93]],
+    "Secure Score breakdown by category (points achieved vs. opportunity)": [["Device", 612, 388], ["Identity", 708, 292], ["Apps", 544, 456], ["Data", 498, 502]]
+  },
+  "tables": {
+    "deviceInventory": [
+      { "platform": "Windows 11", "discovered": 1640, "onboarded": 1596, "gap": 44, "coverage": "97%", "inactive": 28 },
+      { "platform": "Windows 10", "discovered": 720, "onboarded": 664, "gap": 56, "coverage": "92%", "inactive": 41 },
+      { "platform": "Windows Server 2022 / 2025", "discovered": 210, "onboarded": 198, "gap": 12, "coverage": "94%", "inactive": 6 },
+      { "platform": "Windows Server 2016 / 2019", "discovered": 340, "onboarded": 300, "gap": 40, "coverage": "88%", "inactive": 22 },
+      { "platform": "Windows Server 2012 R2", "discovered": 46, "onboarded": 12, "gap": 34, "coverage": "26%", "inactive": 9 },
+      { "platform": "macOS", "discovered": 118, "onboarded": 64, "gap": 54, "coverage": "54%", "inactive": 17 },
+      { "platform": "Linux servers", "discovered": 152, "onboarded": 84, "gap": 68, "coverage": "55%", "inactive": 24 }
+    ],
+    "topVulnerableSoftware": [
+      { "product": "Google Chrome", "vendor": "Google", "devices": 2180, "cves": 214 },
+      { "product": "Microsoft 365 Apps", "vendor": "Microsoft", "devices": 1940, "cves": 96 },
+      { "product": "Acrobat Reader", "vendor": "Adobe", "devices": 1614, "cves": 141 },
+      { "product": "7-Zip", "vendor": "Igor Pavlov", "devices": 1208, "cves": 38 },
+      { "product": "OpenSSL", "vendor": "Open source", "devices": 84, "cves": 62 },
+      { "product": "VMware Tools", "vendor": "Broadcom", "devices": 596, "cves": 27 }
+    ],
+    "secureScoreActions": [
+      { "action": "Turn on tamper protection for all devices", "category": "Device", "score": 0, "state": "To address" },
+      { "action": "Block credential stealing from the LSASS subsystem", "category": "Device", "score": 0, "state": "To address" },
+      { "action": "Enable EDR in block mode", "category": "Device", "score": 0, "state": "To address" },
+      { "action": "Require device compliance for resource access", "category": "Identity", "score": 0, "state": "To address" },
+      { "action": "Update Microsoft Defender antimalware platform", "category": "Device", "score": 0.4, "state": "In progress" }
+    ],
+    "privilegedRoles": [
+      { "role": "Global Administrator", "members": 11 },
+      { "role": "Security Administrator", "members": 6 },
+      { "role": "Security Operator", "members": 14 },
+      { "role": "Security Reader", "members": 23 }
+    ],
+    "conditionalAccess": [
+      { "totalPolicies": 28, "enabledPolicies": 24, "deviceComplianceCA": 0, "deviceRiskUsed": false }
+    ]
+  },
+  "manual": [
+    "Executive summary, risk statement ve tum anlatim metinleri",
+    "Bulgu kaydi: severity karari, effort, owner, hedef tarih",
+    "Olgunluk (current/target) puanlari ve gap analizi",
+    "Yol haritasi (30/90/365 gun) ve oncelik matrisi",
+    "Threat Analytics kullanim durumu (API yok - portaldan)",
+    "Proxy / TLS bypass dogrulamasi (client analyzer ciktisi)",
+    "SOC operasyon modeli, vardiya, playbook ve tatbikat olgunlugu",
+    "Exclusion gerekceleri ve onay sureci"
+  ]
+}
