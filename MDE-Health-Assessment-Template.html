@@ -134,7 +134,7 @@ body.guides .f{background:rgba(27,77,228,.035)}
   padding:3px 7px 3px 10px;border-radius:0 3px 3px 0;
 }
 .draft:before{
-  content:"REVIEW";font-family:var(--sans);font-size:6.5pt;font-weight:800;
+  content:"(REVIEW)";font-family:var(--sans);font-size:6.5pt;font-weight:800;
   letter-spacing:.12em;color:#7A5D00;background:#F3DC9A;
   padding:1px 5px;border-radius:2px;margin-right:7px;vertical-align:1.5px;
   cursor:pointer;user-select:none;
@@ -257,6 +257,8 @@ body.nodata .datahint{display:none}
 .cover .logo svg{width:64px;height:auto}
 .cover .logo .w{font-family:var(--sans);font-weight:800;font-size:19pt;line-height:.95;color:var(--navy);letter-spacing:-.01em}
 .cover .logo .w span{display:block;font-size:19pt}
+.cover .logo .w.ms{font-weight:400;font-size:23pt;letter-spacing:-.02em;color:#5E5E5E;line-height:1}
+.cover .logo svg[aria-label="Microsoft"]{width:38px}
 .scorewrap{display:flex;align-items:flex-end;gap:16px;margin:6px 0 4px}
 .bigscore{font-family:var(--serif);font-size:74pt;line-height:.9;color:var(--navy);font-weight:700}
 .bigscore .of{font-size:30pt;color:var(--muted)}
@@ -287,7 +289,7 @@ body.nodata .datahint{display:none}
 <body class="guides">
 
 <div id="bar">
-  <b>CYBERWISE · MDE ASSESSMENT</b>
+  <b>MDE HEALTH CHECK ASSESSMENT</b>
   <button onclick="toggleToc()">☰ İçindekiler</button>
   <button onclick="window.print()">🖨 PDF / Yazdır</button>
   <button onclick="saveHtml()">💾 HTML olarak kaydet</button>
@@ -307,13 +309,13 @@ body.nodata .datahint{display:none}
 <section class="page cover" data-toc="Kapak" data-grp="Giriş">
   <div class="body">
     <div class="logo">
-      <svg viewBox="0 0 120 90" xmlns="http://www.w3.org/2000/svg" aria-label="CyberWise">
-        <path d="M8 34 H52" stroke="#D8232A" stroke-width="9" stroke-linecap="round"/>
-        <path d="M2 50 H46" stroke="#D8232A" stroke-width="9" stroke-linecap="round"/>
-        <path d="M14 66 H58" stroke="#D8232A" stroke-width="9" stroke-linecap="round"/>
-        <path d="M104 26 A34 34 0 1 0 104 74" stroke="#D8232A" stroke-width="11" fill="none" stroke-linecap="round"/>
+      <svg viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-label="Microsoft">
+        <rect x="1"  y="1"  width="10" height="10" fill="#F25022"/>
+        <rect x="12" y="1"  width="10" height="10" fill="#7FBA00"/>
+        <rect x="1"  y="12" width="10" height="10" fill="#00A4EF"/>
+        <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
       </svg>
-      <div class="w">CYBER<span>WISE</span></div>
+      <div class="w ms">Microsoft</div>
     </div>
 
     <div class="eyebrow">Security Assessment Report</div>
@@ -2501,7 +2503,7 @@ function toggleToc(){document.getElementById('toc').classList.toggle('on');}
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-05';
+const DOCVER='2026-08-06-ms';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);

@@ -540,6 +540,244 @@ if ($fnd.Count -gt 0) {
     $drafts['[Microsoft Learn article'] = 'Add the Microsoft Learn reference and the internal policy identifier.'
 }
 
+# ============================================================================
+#  BEST PRACTICE YORUM KUTUPHANESI
+#  Kontrol satirlarindaki bos "Comment / Observation / Recommendation" hucresine
+#  Microsoft best practice temelli bir cumle yazar. Hepsi REVIEW isaretlidir.
+# ============================================================================
+$bp = [ordered]@{
+    # --- tenant ---
+    'Data storage region'                = 'Storage region is fixed at onboarding and cannot be changed later; confirm it satisfies the client data residency obligation.'
+    'Data retention period'              = 'Set to the maximum the licence allows (180 days) unless a policy requires otherwise; retention drives how far back hunting can reach.'
+    'Preview features enabled'           = 'Keep preview features off in production tenants; enable on a pilot tenant or a limited device group instead.'
+    'Auto-remediation level'             = 'Full automation is recommended for standard workstations; servers commonly run semi-automatic with approval.'
+    'Alert notification rules'           = 'At minimum, high severity alerts should notify the security operations mailbox; verify recipients are monitored out of hours.'
+    'Advanced features'                  = 'Enable every integration the tenant is licensed for; each disabled switch removes correlation signal from incidents.'
+    'Time zone / portal locale'          = 'Align the portal time zone with the SOC operating time zone to avoid timestamp confusion during incident handling.'
+    'licence expiry'                     = 'Track the renewal date; sensors continue reporting after expiry but capability silently degrades.'
+
+    # --- ajan / surum ---
+    'Defender AV platform version'       = 'Platform updates ship monthly; devices more than two releases behind miss detection and performance fixes.'
+    'Antimalware engine version'         = 'Engine version follows the platform update; a lagging engine usually indicates a stalled update channel.'
+    'Security intelligence'              = 'Signature age above 24 hours on a connected device indicates a connectivity or update source problem.'
+    'EDR sensor'                         = 'Keep the EDR sensor current; older builds lack newer behavioural detections and response actions.'
+    'macOS / Linux agent build'          = 'Non-Windows agents are updated through the package manager and are commonly forgotten after the pilot.'
+    'Update ring / channel strategy'     = 'Use gradual rollout rings so a regression is caught on a pilot group before reaching the whole estate.'
+
+    # --- antivirus ---
+    'Defender AV operating mode'         = 'Active mode is required for full protection; passive mode limits remediation to EDR block mode only.'
+    'Real-time protection'               = 'Must be enabled everywhere; any device without it relies solely on scheduled scans.'
+    'Behaviour monitoring'               = 'Required for behavioural detections; disabling it removes most fileless attack coverage.'
+    'Cloud-delivered protection'         = 'Advanced MAPS membership gives access to the cloud protection service; without it detection falls back to local signatures.'
+    'Cloud block level'                  = 'High is the recommended baseline for most estates; High+ adds latency and false positives on developer machines.'
+    'Cloud extended timeout'             = 'Set to 50 seconds so the cloud verdict arrives before the file is released.'
+    'Automatic sample submission'        = 'Send safe samples automatically; without samples the cloud cannot classify new binaries seen in this tenant.'
+    'PUA protection'                     = 'Set to block. Potentially unwanted applications are the most common precursor to a real infection.'
+    'Tamper protection'                  = 'Enforce tenant-wide from the Defender portal. Ransomware operators disable AV first; this control is what stops that.'
+    'EDR in block mode'                  = 'Enable for all devices, not just the pilot group; it is what turns a behavioural detection into a prevention.'
+    'Scan removable drives'              = 'Enable so USB media is scanned on mount rather than on first access.'
+    'Scan network files'                 = 'Enable for workstations; on file servers assess performance impact first.'
+    'Scheduled quick / full scan'        = 'A daily quick scan is sufficient when real-time protection is healthy; full scans are for remediation, not routine.'
+    'Signature update interval'          = 'Four hours or less. Longer intervals leave a measurable window against fast-moving campaigns.'
+    'Fallback update source'             = 'Order the sources so an isolated device can still update: Microsoft Update, then MMPC, then an internal UNC share.'
+    'Catch-up scan'                      = 'Enable so devices that were offline scan and update as soon as they return.'
+    'Archive / email scanning'           = 'Enable; archives are the standard delivery wrapper for malicious payloads.'
+    'Script scanning'                    = 'AMSI script scanning is required to see obfuscated PowerShell and JScript at runtime.'
+    'Potentially unwanted app removal'   = 'Set remediation to quarantine rather than allow, and review the quarantine weekly.'
+    'Local admin override'               = 'Local administrators should not be able to change protection settings; combine with tamper protection.'
+    'Troubleshooting mode'               = 'Troubleshooting mode temporarily disables tamper protection; every use should be ticketed and time-boxed.'
+
+    # --- exclusions ---
+    'Path exclusions'                    = 'Exclusions that cover a whole drive or a user-writable path create a scanning blind spot that malware lands in by default.'
+    'Extension exclusions'               = 'Extension exclusions apply estate-wide and are almost never justified; prefer a narrow path or process exclusion.'
+    'Process exclusions'                 = 'Process exclusions must name a signed binary with a full path; a bare process name can be impersonated.'
+    'ASR per-rule exclusions'            = 'Per-rule exclusions silently weaken the rule for the scoped devices; review them whenever the rule set changes.'
+    'Controlled folder access allowed'   = 'Keep the allowed application list short and reviewed; each entry can write to protected folders.'
+    'Indicator allow-list'               = 'Allow indicators bypass detection entirely; every entry needs an owner and an expiry date.'
+    'Exclusion review cadence'           = 'Exclusions accumulate. Review at least twice a year with the application owner and remove anything unclaimed.'
+
+    # --- ASR ---
+    'Block credential stealing from LSASS' = 'Highest value rule in the set: blocks the standard credential dumping path. Enforce first.'
+    'Block all Office applications from creating child processes' = 'Blocks the classic macro-to-payload chain; expect tuning for finance macro suites.'
+    'Block executable content from email' = 'Blocks payloads delivered by mail before execution; tune for legitimate self-extracting tooling.'
+    'Block execution of potentially obfuscated scripts' = 'High value, but legacy logon scripts are often obfuscated by design; pilot before enforcing.'
+    'Block JavaScript / VBScript'        = 'Blocks script-launched downloads; low false positive rate in most estates.'
+    'Block Office applications from creating executable content' = 'Prevents Office writing payloads to disk; safe to enforce in most environments.'
+    'Block Office applications from injecting' = 'Blocks process injection from Office; rarely conflicts with legitimate software.'
+    'Block process creations originating from PSExec' = 'Blocks lateral movement tooling; exclude the management agent (MECM) before enforcing.'
+    'Block untrusted and unsigned processes that run from USB' = 'Enforce together with removable media control for a complete USB story.'
+    'Block persistence through WMI'       = 'Blocks a common fileless persistence route; safe to enforce.'
+    'Block Webshell creation for servers' = 'Applies to servers with the appropriate licence; a key control for internet-facing web servers.'
+    'Block Win32 API calls from Office macros' = 'Blocks the macro-to-shellcode path; verify against any macro-based line-of-business tooling.'
+    'Block abuse of exploited vulnerable signed drivers' = 'Blocks bring-your-own-vulnerable-driver attacks used to disable security tooling.'
+    'Block Adobe Reader'                 = 'Blocks the reader-to-payload chain; safe to enforce in almost all estates.'
+    'Block rebooting machine in Safe Mode' = 'Prevents an attacker restarting into Safe Mode to disable protection; safe to enforce.'
+    'Block use of copied or impersonated system tools' = 'Blocks renamed system binaries used to evade detection; safe to enforce.'
+    'Block executable files unless prevalence' = 'Strong control but disruptive with bespoke internal tooling; audit first, then decide.'
+    'Block Office communication application' = 'Blocks Outlook spawning child processes; safe to enforce.'
+    'Use advanced protection against ransomware' = 'Adds cloud-backed ransomware heuristics; enable in block mode.'
+    'Controlled folder access'           = 'The strongest anti-ransomware control available here; deploy in audit first to build the allowed application list.'
+
+    # --- network / device / app ---
+    'Network protection'                 = 'Move from audit to block; in audit mode malicious destinations are logged and still reached.'
+    'Web content filtering'              = 'Block newly registered and uncategorised domains first; they carry most phishing infrastructure.'
+    'Web threat protection'              = 'SmartScreen must be enforced through policy, not left to user preference in the browser.'
+    'Custom URL / IP indicators'          = 'Maintain a managed block list fed by incident output and threat intelligence, with expiry dates.'
+    'Network protection for macOS / Linux' = 'Available on both platforms and commonly missed; enable to close the non-Windows gap.'
+    'DNS / proxy inspection'             = 'TLS inspection on Defender endpoints breaks sensor connectivity; bypass the Microsoft URL list on the proxy.'
+    'Removable storage access control'   = 'Default to read-only for unknown USB storage and allow-list approved device IDs.'
+    'Removable storage protection'       = 'Scan removable media on mount; pair with the USB ASR rule.'
+    'Printer protection'                 = 'Restrict printing to approved printers where data exfiltration through print is a concern.'
+    'Bluetooth / WPD control'            = 'Restrict pairing and file transfer on managed devices.'
+    'Device installation restrictions'   = 'Allow-list by device instance ID; deny-lists are trivially bypassed with different hardware.'
+    'BitLocker / disk encryption'        = 'Encryption must be enforced and recovery keys escrowed in Entra ID; verify escrow, not just enablement.'
+    'App Control for Business'           = 'The strongest control against untrusted binaries; start in audit mode and build the policy from real telemetry.'
+    'AppLocker'                          = 'Acceptable where WDAC is not viable, but weaker and easier to bypass; treat as an interim control.'
+    'Smart App Control'                  = 'Only applies to clean-installed Windows 11 devices; evaluate for new builds.'
+    'Exploit protection'                 = 'Apply the Microsoft baseline XML through policy rather than configuring mitigations per device.'
+    'Hardware-based isolation'           = 'Application Guard requires supported hardware; assess coverage before committing to it as a control.'
+    'Credential Guard / LSA protection'  = 'Enable both; together they remove the most common credential theft path from memory.'
+    'Memory integrity'                   = 'HVCI blocks unsigned kernel code; check driver compatibility before enforcing.'
+    'Secure Boot / TPM / VBS'            = 'Prerequisites for most modern protection features; devices without them cannot be fully hardened.'
+    'Defender Firewall enabled'          = 'All three profiles must be on; a disabled public profile is the common gap on laptops.'
+    'Inbound default action'             = 'Block by default and allow by exception; audit any rule that opens a listening port broadly.'
+    'Rule merging from local admins'     = 'Disable local rule merging so users cannot silently open the firewall.'
+    'Firewall rules managed centrally'   = 'Manage rules from Intune or Group Policy so drift is visible and reversible.'
+    'Firewall logging'                   = 'Enable dropped-packet logging and forward it; without logs, firewall issues are invisible during incidents.'
+
+    # --- TVM ---
+    'Software inventory completeness'    = 'Inventory only covers devices with a healthy sensor; unhealthy devices under-report their exposure.'
+    'Security recommendations triaged'   = 'Triage weekly against exposure and exploit availability rather than CVSS alone.'
+    'Remediation requests'               = 'Route Defender remediation requests into Intune or the ticketing system so they are tracked to closure.'
+    'Exception / mitigation tracking'    = 'Every exception should be time-bound, justified and re-reviewed on expiry.'
+    'Browser extension assessment'       = 'Browser extensions run with page privileges and are a common data exfiltration route; review the installed set.'
+    'Certificate inventory'              = 'Track expiring and weak certificates on endpoints; expiry causes outages that look like incidents.'
+    'Firmware / hardware advisories'     = 'Firmware sits below the operating system and survives reimaging; include it in the patch cycle.'
+    'Missing KB / OS patch visibility'   = 'Compare Defender findings against the patch management tool; divergence usually means a broken agent.'
+    'Network share / SMB assessment'     = 'Review shares with broad write permissions; they are the standard lateral movement and ransomware amplifier.'
+    'Authenticated scan'                 = 'Use authenticated scanning for network devices and unmanaged assets that cannot carry a sensor.'
+    'SLA definition for critical CVEs'   = 'Define and measure remediation SLAs by severity and exploit availability, not by device count.'
+    'Patch management integration'       = 'Vulnerability data is only useful when it drives a patch cycle; confirm the handover point is owned.'
+
+    # --- baseline / policy ---
+    'Primary policy authority'           = 'Pick one authority. Mixed GPO and Intune management is the most common source of silent policy conflicts.'
+    'Policy conflicts detected'          = 'Any conflict leaves the effective setting undefined; resolve rather than document.'
+    'Security settings management'       = 'Lets Defender manage security settings on devices that are not Intune-enrolled; useful for servers.'
+    'Endpoint security profiles assigned' = 'Verify assignment coverage, not just profile existence; an unassigned profile protects nothing.'
+    'Profile assignment coverage'        = 'Target coverage is every onboarded device; gaps here explain most configuration findings.'
+    'Configuration drift detection'      = 'Without automated drift detection, deviation is found only when something fails or an incident occurs.'
+    'Change control for security policy' = 'Security policy changes should follow the same change record as any other production change.'
+    'Ring-based / pilot deployment'      = 'Deploy protection changes in rings; enforcement without a pilot is the main cause of rollback.'
+
+    # --- EDR ---
+    'EDR sensor active on all onboarded' = 'A device counted as onboarded but not reporting is invisible to detection, hunting and response.'
+    'Behavioural blocking & containment' = 'Requires Plan 2; provides post-breach containment when a signature has not yet been produced.'
+    'Device discovery'                   = 'Standard discovery finds unmanaged devices on the same network segments; basic discovery only sees passive traffic.'
+    'Device isolation tested'            = 'Test isolation before you need it, and document who is authorised to trigger it out of hours.'
+    'Contain device / contain user'      = 'Containment limits an unmanaged or compromised identity without a full isolation; verify it is available and understood.'
+    'App execution restriction'          = 'Restricting execution to signed binaries is a lighter alternative to full isolation during triage.'
+    'Live response enabled'              = 'Powerful and dangerous: restrict to named analysts and audit every session.'
+    'Live response unsigned script'      = 'Allowing unsigned scripts effectively grants arbitrary code execution on any endpoint; restrict tightly.'
+    'Investigation package'              = 'Collect the investigation package before remediation; remediation destroys the evidence.'
+    'Timeline / device event retention'  = 'Timeline retention limits how far back an investigation can reach; align it with the detection-to-discovery gap.'
+    'Alert suppression rules reviewed'   = 'Suppression rules hide alerts permanently; review them for over-broad scope at least quarterly.'
+    'Alert tuning / false-positive'      = 'A defined tuning loop is what keeps alert volume manageable without suppressing real detections.'
+    'Detection coverage validated'       = 'Validate with attack simulation or purple team rather than assuming coverage from configuration.'
+
+    # --- hunting / TI ---
+    'Advanced hunting used regularly'    = 'Hunting turns telemetry into detections; without a cadence it happens only after a public incident.'
+    'Number of custom detection rules'   = 'Custom detections encode what the organisation knows about its own environment; Microsoft rules cannot.'
+    'Custom rules reviewed'              = 'Keep rules in version control with an owner; unowned rules become noise and get suppressed.'
+    'Rule frequency & impacted entities' = 'Match rule frequency to the attack timeline and set impacted entities so response actions can be automated.'
+    'Automated actions on custom detections' = 'Attach response actions to high-confidence rules so containment does not wait for an analyst.'
+    'Hunting query library'              = 'A shared query library is what makes hunting repeatable across analysts.'
+    'Threat hunting programme'           = 'Schedule hunting as a recurring commitment, not as a response to news.'
+    'Analyst KQL skill'                  = 'KQL capability is the limiting factor for both hunting and custom detections; plan training accordingly.'
+    'Threat analytics reports reviewed'  = 'Threat analytics maps active campaigns to this tenant exposure; review on publication, not monthly.'
+    'Exposed devices remediated per report' = 'Each report lists exposed and misconfigured devices; treat that list as a work queue.'
+    'Indicators (file hash)'             = 'Hash indicators are precise but short-lived; use them for incident response, not as a strategy.'
+    'Indicators (IP / URL / domain)'     = 'Network indicators age quickly; set expiry dates and review sources.'
+    'Indicators (certificates)'          = 'Certificate indicators block signed malware families effectively and are often overlooked.'
+    'Indicator expiry & review'          = 'Indicators without expiry accumulate into an unmanaged block list that eventually breaks something.'
+    'External TI feed integration'       = 'Feed external intelligence in through the indicator API rather than by manual entry.'
+    'Defender Experts'                   = 'Managed hunting is worth evaluating where the SOC lacks 24x7 coverage or deep hunting capability.'
+
+    # --- yonetisim ---
+    'RBAC enabled'                       = 'Move off tenant-wide roles: RBAC with device groups is what limits blast radius of an over-privileged account.'
+    'Least-privilege review cadence'     = 'Review role membership quarterly; access granted for a project rarely gets removed afterwards.'
+    'Privileged Identity Management'     = 'Standing administrative access should be replaced with time-bound, approved elevation.'
+    'MFA enforced for admin roles'       = 'Non-negotiable. An administrator without MFA is the shortest path to the whole estate.'
+    'Break-glass accounts documented'    = 'Emergency access accounts must be excluded from Conditional Access, monitored and tested.'
+    'Portal action audit logging'        = 'Portal actions are recorded; review them to confirm response actions are taken by the expected people.'
+    'API token / secret rotation'        = 'Application secrets used for integrations should be rotated on a schedule and stored in a vault.'
+    'Device tagging strategy'            = 'Tags drive device groups, RBAC scope and automation level; an untagged estate cannot be governed.'
+    'Device value'                       = 'Marking high-value devices changes exposure scoring and prioritisation; set it deliberately.'
+    'Critical asset identification'      = 'Critical asset management raises the priority of alerts on business-critical devices.'
+    'Exclusion group / policy scoping'   = 'Exclusion groups quietly remove devices from protection; review their membership as carefully as the policy itself.'
+    'Alert email notification rules'     = 'Notification rules should be scoped by severity and device group so they stay actionable.'
+    'Vulnerability event notifications'  = 'Notify on new exploitable vulnerabilities affecting the estate rather than on every published CVE.'
+    'Executive / monthly security reporting' = 'Regular reporting is what keeps remediation funded; use a small stable set of metrics.'
+    'KPI dashboard for management'       = 'Coverage, sensor health, ASR enforcement and remediation SLA are the four metrics worth reporting.'
+    'Service health / message centre'    = 'Service health and message centre carry breaking changes that affect protection; assign an owner.'
+    'Documented run-book'                = 'A run-book is what makes response repeatable when the person who knows is on leave.'
+
+    # --- entegrasyon ---
+    'Microsoft Defender XDR'             = 'The unified portal correlates endpoint, identity, mail and cloud app signal into a single incident.'
+    'Microsoft Defender for Identity'    = 'Adds domain controller signal; without it lateral movement is only visible from the endpoint side.'
+    'Microsoft Defender for Office 365'  = 'Links the delivering mail to the endpoint detonation; essential for phishing investigations.'
+    'Microsoft Defender for Cloud Apps'  = 'Adds SaaS and shadow IT visibility to endpoint incidents.'
+    'Microsoft Defender for Cloud'       = 'Provides the server onboarding and licensing path for cloud and hybrid workloads.'
+    'Microsoft Intune connection'        = 'Required for compliance-driven access and for remediation requests to flow into a work queue.'
+    'Device risk'                        = 'Publish device risk into Conditional Access; otherwise a compromised device keeps its access until an analyst acts.'
+    'Microsoft Sentinel connector'       = 'Stream alerts, incidents and the raw device tables; alerts alone are not enough to hunt in the SIEM.'
+    'Streaming API / raw data export'    = 'Raw export is the only way to keep endpoint telemetry beyond the portal retention window.'
+    'Microsoft Purview'                  = 'Relevant where endpoint DLP or insider risk signals are in scope.'
+    'Microsoft Security Copilot'         = 'Evaluate against analyst time saved on triage and summarisation; requires clean data to be useful.'
+    'Third-party SIEM'                   = 'Confirm what is forwarded and what is lost in translation, particularly incident status and evidence.'
+    'Non-Microsoft AV / EDR coexistence' = 'Running two protection agents degrades both; document the coexistence decision and the passive-mode implications.'
+
+    # --- uyumluluk ---
+    'Malware protection'                 = 'Evidenced by antivirus configuration and detection telemetry in this report.'
+    'Endpoint hardening'                 = 'Evidenced by the security baseline compliance figures in Section 10.'
+    'Vulnerability management'           = 'Evidenced by the exposure score and remediation performance in Section 09.'
+    'Asset inventory'                    = 'Auditors expect evidence that the inventory is complete; the onboarding gap is the counter-evidence.'
+    'Logging & monitoring'               = 'Evidenced by telemetry retention and SIEM forwarding; state both durations.'
+    'Access control / privileged access' = 'Evidenced by the RBAC and privileged role review in Section 14.'
+    'Application control'                = 'Evidenced by WDAC or AppLocker state; audit mode is partial compliance at best.'
+    'Data protection on endpoints'       = 'Evidenced by disk encryption coverage and removable media control.'
+    'Incident response'                  = 'Evidenced by response metrics and a tested playbook, not by the existence of a document.'
+    'Removable media control'            = 'Evidenced by device control policy and USB-related ASR rules.'
+    'Network protection / web filtering' = 'Evidenced by network protection mode and web content filtering policy coverage.'
+    'Security awareness'                 = 'Endpoint findings that trace to user behaviour belong in the awareness programme, not only in technical remediation.'
+}
+
+# best practice yorumlarini satirin SON bos duzenlenebilir hucresine yaz
+$script:bpCount = 0
+$script:bpMap = $bp
+$html = [regex]::Replace($html, '(?s)<tr>(?:(?!</tr>).)*</tr>', {
+    param($rm)
+    $row = $rm.Value
+    if ($row -notmatch 'data-ph=') { return $row }
+    $cells = [regex]::Matches($row, '(?s)<td[^>]*>(.*?)</td>')
+    if ($cells.Count -lt 2) { return $row }
+    $label = (($cells[0].Groups[1].Value -replace '<[^>]+>', ' ') -replace '&amp;', '&' -replace '\s+', ' ').Trim()
+    if (-not $label -or $label.StartsWith('[')) { return $row }
+
+    $text = $null
+    foreach ($k in $script:bpMap.Keys) {
+        if ($label -like "*$k*") { $text = $script:bpMap[$k]; break }
+    }
+    if (-not $text) { return $row }
+
+    # son bos duzenlenebilir hucreyi bul
+    $empties = [regex]::Matches($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>')
+    if ($empties.Count -eq 0) { return $row }
+    $last = $empties[$empties.Count - 1]
+    $script:bpCount++
+    $repl = "<td$($last.Groups[1].Value)><span class=`"draft`">$(Esc $text)</span></td>"
+    return $row.Remove($last.Index, $last.Length).Insert($last.Index, $repl)
+})
+
 # --- taslaklari yerlestir (yalnizca hala bos olan alanlara) ---
 $script:draftCount = 0
 foreach ($key in $drafts.Keys) {
