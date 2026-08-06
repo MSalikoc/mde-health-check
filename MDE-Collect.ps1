@@ -444,9 +444,12 @@ $vuln = Invoke-Hunting -Query $q -What 'vuln-severity'
 if ($vuln.Count) {
     $order = 'Critical', 'High', 'Medium', 'Low'
     $data.charts['Vulnerabilities by severity'] = @(
-        $order | ForEach-Object { $s = $_
-            $row = $vuln | Where-Object VulnerabilitySeverityLevel -eq $s
-            , @($s, [int]($row.Instances | Select-Object -First 1)) })
+        $order | ForEach-Object {
+            $s = $_
+            $row = $vuln | Where-Object { $_.VulnerabilitySeverityLevel -eq $s }
+            $n = [int]($row.Instances | Select-Object -First 1)
+            Write-Output -NoEnumerate @($s, $n)
+        })
     $data.kpi['Total vulnerabilities'] = '{0:N0}' -f (($vuln | Measure-Object Instances -Sum).Sum)
     $data.kpi['Critical CVEs'] = '{0:N0}' -f ([int](($vuln | Where-Object VulnerabilitySeverityLevel -eq 'Critical').Cves))
     Write-Ok "$($data.kpi['Total vulnerabilities']) zafiyet örneği"
@@ -514,8 +517,13 @@ if ($alerts) {
     $data.kpi['Open / in progress'] = '{0:N0}' -f (@($mde | Where-Object { $_.status -in 'new', 'inProgress' }).Count)
 
     $sev = 'high', 'medium', 'low', 'informational'
-    $data.charts['Alert severity breakdown'] = @($sev | ForEach-Object { $s = $_
-        , @((Get-Culture).TextInfo.ToTitleCase($s), @($mde | Where-Object severity -eq $s).Count) })
+    $data.charts['Alert severity breakdown'] = @(
+        $sev | ForEach-Object {
+            $s = $_
+            $label = (Get-Culture).TextInfo.ToTitleCase($s)
+            $n = @($mde | Where-Object { $_.severity -eq $s }).Count
+            Write-Output -NoEnumerate @($label, $n)
+        })
     $data.charts['Alert status breakdown'] = @(
         @('Resolved',    @($mde | Where-Object status -eq 'resolved').Count),
         @('In progress', @($mde | Where-Object status -eq 'inProgress').Count),
