@@ -127,6 +127,24 @@ body.guides .f:empty{
 body.guides .f{background:rgba(27,77,228,.035)}
 .f{min-width:14px}
 
+/* ---------- Taslak metin (REVIEW) ---------- */
+.draft{
+  background:#FFFBEA;
+  box-shadow:inset 3px 0 0 #E8B923;
+  padding:3px 7px 3px 10px;border-radius:0 3px 3px 0;
+}
+.draft:before{
+  content:"REVIEW";font-family:var(--sans);font-size:6.5pt;font-weight:800;
+  letter-spacing:.12em;color:#7A5D00;background:#F3DC9A;
+  padding:1px 5px;border-radius:2px;margin-right:7px;vertical-align:1.5px;
+  cursor:pointer;user-select:none;
+}
+.draft:hover:before{background:#E8B923;color:#fff}
+td .draft,li .draft{display:inline}
+body.nodrafts .draft{background:transparent;box-shadow:none;padding:0}
+body.nodrafts .draft:before{display:none}
+#bar .cnt{background:#F3DC9A;color:#5A4500;border-radius:9px;padding:1px 7px;font-weight:700}
+
 /* ---------- KPI ---------- */
 .kpis{display:grid;gap:10px}
 .kpi{
@@ -275,6 +293,7 @@ body.nodata .datahint{display:none}
   <button onclick="saveHtml()">💾 HTML olarak kaydet</button>
   <button class="ghost" onclick="document.body.classList.toggle('guides')">Alan çerçevelerini gizle/göster</button>
   <button class="ghost" onclick="document.body.classList.toggle('nodata')">Grafik veri tablolarını gizle/göster</button>
+  <button onclick="clearDrafts()">✓ REVIEW işaretlerini kaldır <span class="cnt" id="draftCount">0</span></button>
   <button class="ghost" onclick="resetDoc()">↺ Sıfırla</button>
   <span class="sp"></span>
   <span class="hint">Metinlere tıklayıp yazın · Grafik altındaki tabloya sayı girin, grafik anında çizilir · Değişiklikler tarayıcıda otomatik saklanır</span>
@@ -2441,6 +2460,31 @@ document.addEventListener('change',e=>{
   }
 });
 
+/* ===================== Taslak (REVIEW) metinleri ===================== */
+function unwrapDraft(el){
+  const p=el.parentNode; if(!p) return;
+  while(el.firstChild) p.insertBefore(el.firstChild,el);
+  p.removeChild(el);
+}
+function updateDraftCount(){
+  const el=document.getElementById('draftCount');
+  if(el) el.textContent=document.querySelectorAll('.draft').length;
+}
+function clearDrafts(){
+  const n=document.querySelectorAll('.draft').length;
+  if(!n){alert('REVIEW işareti kalmadı.');return;}
+  if(!confirm(n+' adet REVIEW işaretli taslak metin var.\n\nHepsini onaylanmış sayıp işaretleri kaldırmak istiyor musunuz?\n(Metinler olduğu gibi kalır, yalnızca sarı işaret gider.)')) return;
+  document.querySelectorAll('.draft').forEach(unwrapDraft);
+  updateDraftCount(); save();
+}
+/* REVIEW rozetine tıklayınca yalnızca o taslağı onayla */
+document.addEventListener('click',e=>{
+  const d=e.target.closest?e.target.closest('.draft'):null;
+  if(!d) return;
+  const r=d.getBoundingClientRect();
+  if(e.clientX-r.left<60){ unwrapDraft(d); updateDraftCount(); save(); }
+});
+
 /* ===================== İçindekiler ===================== */
 function buildToc(){
   const nav=document.getElementById('toc');let html='',grp='';
@@ -2514,7 +2558,7 @@ document.addEventListener('paste',e=>{
 window.addEventListener('DOMContentLoaded',()=>{
   restore();
   buildSelects();
-  buildToc();renderAll();renderBars();paintSelects();
+  buildToc();renderAll();renderBars();paintSelects();updateDraftCount();
 });
 </script>
 </body>
