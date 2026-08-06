@@ -187,7 +187,10 @@ function Invoke-Hunting {
 function Pairs { param($Rows, [string]$Key, [string]$Val)
     @($Rows | ForEach-Object { , @($_.$Key, [int]$_.$Val) })
 }
-function Pct { param($n, $d) if ($d -gt 0) { [math]::Round(100 * $n / $d) } else { 0 } }
+function Pct {
+    param($n, $d)
+    if ($d -gt 0) { [math]::Round(100 * $n / $d) } else { 0 }
+}
 
 $data = [ordered]@{
     meta   = [ordered]@{
@@ -419,8 +422,10 @@ if ($asr.Count) {
     $data.kpi['Rules in block mode'] = $blockRules.Count
     $data.kpi['Rules in audit mode'] = $auditRules.Count
     $data.charts['ASR rule mode distribution'] = @(
-        , @('Block', $blockRules.Count), , @('Audit', $auditRules.Count),
-        , @('Warn', 0), , @('Not configured', [math]::Max(0, 20 - $blockRules.Count - $auditRules.Count)))
+        @('Block', $blockRules.Count),
+        @('Audit', $auditRules.Count),
+        @('Warn', 0),
+        @('Not configured', [math]::Max(0, 20 - $blockRules.Count - $auditRules.Count)))
     $data.charts['Top audited attack vectors (30 days)'] = @(
         $data.tables.asrEvents | Where-Object mode -eq 'Audit' | Sort-Object events -Descending |
         Select-Object -First 5 | ForEach-Object { , @($_.rule, [int]$_.events) })
@@ -512,9 +517,9 @@ if ($alerts) {
     $data.charts['Alert severity breakdown'] = @($sev | ForEach-Object { $s = $_
         , @((Get-Culture).TextInfo.ToTitleCase($s), @($mde | Where-Object severity -eq $s).Count) })
     $data.charts['Alert status breakdown'] = @(
-        , @('Resolved',    @($mde | Where-Object status -eq 'resolved').Count),
-        , @('In progress', @($mde | Where-Object status -eq 'inProgress').Count),
-        , @('New',         @($mde | Where-Object status -eq 'new').Count))
+        @('Resolved',    @($mde | Where-Object status -eq 'resolved').Count),
+        @('In progress', @($mde | Where-Object status -eq 'inProgress').Count),
+        @('New',         @($mde | Where-Object status -eq 'new').Count))
 
     # MITRE taktikleri — alert.category taktiğe karşılık gelir (CredentialAccess, LateralMovement…)
     $tactics = @{}

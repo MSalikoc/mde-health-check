@@ -231,7 +231,8 @@ $note = @"
 "@
 $script:noteHtml = $note
 $html = [regex]::Replace($html, '(?s)(</div>\s*<script>)', {
-    param($m) $script:noteHtml + $m.Groups[1].Value
+    param($m)
+    $script:noteHtml + $m.Groups[1].Value
 }, 1)
 
 # ------------------------------------------------------------ KAPAK LOGO --
@@ -253,7 +254,10 @@ if ($Logo -ne 'template') {
     $script:logoHtml = $newLogo
     $rxLogo = [regex]'(?s)<div class="logo">.*?<div class="w">.*?</div>\s*</div>'
     if ($rxLogo.IsMatch($html)) {
-        $html = $rxLogo.Replace($html, { param($m) $script:logoHtml }, 1)
+        $html = $rxLogo.Replace($html, {
+            param($m)
+            $script:logoHtml
+        }, 1)
         $filled.fields++
     } else {
         Write-Warning 'Kapak logosu bulunamadı — şablon değişmiş olabilir, logo değiştirilmedi.'

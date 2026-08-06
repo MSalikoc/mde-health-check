@@ -78,12 +78,13 @@ if (-not $SkipCollect) {
     Write-Host ' 1/2 · Veri toplanıyor' -ForegroundColor White
     Write-Host '  Birazdan bir cihaz kodu görünecek — https://microsoft.com/devicelogin' -ForegroundColor DarkGray
 
-    $args = @{ TenantId = $TenantId; OutFile = $dataFile; AlertDays = $AlertDays; EventDays = $EventDays }
-    if ($ClientId)  { $args.ClientId = $ClientId }
-    if ($GraphOnly) { $args.GraphOnly = $true }
-    $args.RawDumpPath = (Join-Path $root 'raw')
+    # NOT: $args otomatik değişken — kendi splat tablomuz farklı isimde olmalı
+    $cargs = @{ TenantId = $TenantId; OutFile = $dataFile; AlertDays = $AlertDays; EventDays = $EventDays }
+    if ($ClientId)  { $cargs.ClientId = $ClientId }
+    if ($GraphOnly) { $cargs.GraphOnly = $true }
+    $cargs.RawDumpPath = (Join-Path $root 'raw')
 
-    & (Join-Path $root 'MDE-Collect.ps1') @args
+    & (Join-Path $root 'MDE-Collect.ps1') @cargs
     if (-not (Test-Path $dataFile)) { throw 'Toplama tamamlanamadı, JSON oluşmadı.' }
 }
 else {
