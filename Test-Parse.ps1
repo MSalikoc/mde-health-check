@@ -48,6 +48,15 @@ foreach ($file in (Get-ChildItem -Path $Path -Filter '*.ps1' | Sort-Object Name)
     else {
         Write-Host " OK    $($file.Name)" -ForegroundColor Green
     }
+
+    # Akilli tirnak uyarisi: PowerShell U+2018/2019/201C/201D karakterlerini de
+    # string sinirlayicisi sayar; Turkce kesme isareti olarak kullanilirsa
+    # string'i erken kapatir ve tum dosyanin tirnak eslesmesi kayar.
+    $raw = Get-Content -Path $file.FullName -Raw
+    $smart = [regex]::Matches($raw, '[‘’“”]')
+    if ($smart.Count -gt 0) {
+        Write-Host "       ! $($smart.Count) adet akilli tirnak var — duz tirnakla degistirin" -ForegroundColor Yellow
+    }
 }
 
 Write-Host ''

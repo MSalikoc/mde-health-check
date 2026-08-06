@@ -615,7 +615,7 @@ if ($web.Count) {
 }
 
 # ==================================== 10 · INTUNE POLICY / EXCLUSIONS =====
-Write-Step 'Intune endpoint security politikaları ve AV exclusion’ları'
+Write-Step 'Intune endpoint security politikalari ve AV exclusion listesi'
 $pol = Try-Api { Invoke-Api -All -Uri 'https://graph.microsoft.com/beta/deviceManagement/configurationPolicies?$expand=assignments' } 'configurationPolicies'
 if ($pol) {
     $data.tables.intunePolicies = @($pol | ForEach-Object {
@@ -683,7 +683,7 @@ if ($ca) {
 
 # ======================================== 12 · MDE-ONLY API (opsiyonel) ===
 if (-not $GraphOnly) {
-    Write-Step 'MDE API (exposure score, öneriler, indicator’lar)'
+    Write-Step 'MDE API: exposure score, oneriler, indicator listesi'
     $exp = Try-Api { Invoke-Api -Api mde -Uri 'https://api.securitycenter.microsoft.com/api/exposureScore' } 'exposureScore'
     if ($exp) {
         $data.kpi['Exposure Score'] = [math]::Round($exp.score)
