@@ -391,8 +391,16 @@ foreach ($k in $cover.Keys) {
 }
 
 # Secure Score büyük rakam
-if ($d.meta.secureScore) {
-    $score = ($d.meta.secureScore -split '/')[0].Trim()
+if ($d.meta.secureScore -or $d.kpi.'Secure score for devices') {
+    # Sablonda "/100" sabit -> buraya yuzde yazilmali, ham puan degil
+    $score = ($d.kpi.'Secure score for devices') -replace '%', ''
+    if (-not $score) {
+        $parts = $d.meta.secureScore -split '/'
+        if ($parts.Count -eq 2) {
+            $cur = [double]($parts[0].Trim()); $max = [double]($parts[1].Trim())
+            if ($max -gt 0) { $score = [math]::Round(100 * $cur / $max) }
+        }
+    }
     $html = $html.Replace('<div class="bigscore"><span class="f" contenteditable data-ph="––"></span>',
                           "<div class=`"bigscore`"><span class=`"f`" contenteditable data-ph=`"––`">$score</span>")
     $filled.fields++
@@ -422,7 +430,8 @@ $med  = @($fnd | Where-Object { $_.severity -eq 'Medium' })
 $low  = @($fnd | Where-Object { $_.severity -eq 'Low' })
 $client = if ($ClientName) { $ClientName } elseif ($d.meta.tenantName) { $d.meta.tenantName } else { 'the organisation' }
 $topRisk = if ($crit.Count) { $crit[0].finding } elseif ($high.Count) { $high[0].finding } else { 'no critical exposure was identified' }
-$platforms = @($d.tables.deviceInventory | ForEach-Object { $_.platform }) -join ', '
+$platforms = (@($d.tables.deviceInventory | ForEach-Object { "$($_.platform)".Trim() } |
+    Where-Object { $_ -and $_ -ne 'Windows' } | Select-Object -Unique) -join ', ')
 $window = if ($d.meta.alertWindow) { $d.meta.alertWindow } else { '90 days' }
 
 $drafts = [ordered]@{}
@@ -852,19 +861,19 @@ $note = @"
     <div class="eyebrow">Collector output</div>
     <h2>Automated Collection Notes</h2>
     <div class="rule"></div>
-    <p class="small mut">Bu sayfa MDE-Render.ps1 tarafından eklendi. Raporu teslim etmeden önce silin.</p>
+    <p class="small mut">This page was added by MDE-Render.ps1. Delete it before issuing the report.</p>
     <table class="t compact">
       <tbody>
-        <tr><td style="width:30%"><b>Toplama zamanı (UTC)</b></td><td>$(Esc $d.meta.generatedUtc)</td></tr>
+        <tr><td style="width:30%"><b>Collected (UTC)</b></td><td>$(Esc $d.meta.generatedUtc)</td></tr>
         <tr><td><b>Tenant</b></td><td>$(Esc $d.meta.tenantName) · $(Esc $d.meta.verifiedDomain)</td></tr>
-        <tr><td><b>Uyarı penceresi</b></td><td>$(Esc $d.meta.alertWindow)</td></tr>
-        <tr><td><b>Olay penceresi</b></td><td>$(Esc $d.meta.eventWindow)</td></tr>
-        <tr><td><b>Otomatik doldurulan</b></td><td>$($filled.charts) grafik · $($filled.kpi) KPI · $($filled.rows) tablo satırı · $($filled.fields) alan</td></tr>
+        <tr><td><b>Alert window</b></td><td>$(Esc $d.meta.alertWindow)</td></tr>
+        <tr><td><b>Event window</b></td><td>$(Esc $d.meta.eventWindow)</td></tr>
+        <tr><td><b>Automatically populated</b></td><td>$($filled.charts) charts · $($filled.kpi) KPIs · $($filled.rows) table rows · $($filled.fields) fields · $($script:draftCount + $script:bpCount) draft texts</td></tr>
       </tbody>
     </table>
-    <h3>Toplama uyarıları</h3>
+    <h3>Collection warnings</h3>
     <ul class="small">$warn</ul>
-    <h3>Elle tamamlanacaklar</h3>
+    <h3>To be completed manually</h3>
     <ul class="small">$manual</ul>
   </div>
   <div class="pfoot"><span class="cls">Confidential</span><span>Microsoft Defender for Endpoint — Health Check Assessment</span><span class="pn">Page </span></div>
@@ -921,5 +930,5 @@ Set-Content -Path $OutFile -Value $html -Encoding utf8
 Write-Host ''
 Write-Host "  Rapor yazıldı: $OutFile" -ForegroundColor Green
 Write-Host "  Dolduruldu: $($filled.charts) grafik, $($filled.kpi) KPI, $($filled.rows) tablo satırı, $($filled.fields) alan" -ForegroundColor DarkGray
-Write-Host '  Kalan alanlar yer tutuculu — tarayıcıda açıp elle tamamlayın.' -ForegroundColor DarkGray
+Write-Host "  Taslak metin: $($script:draftCount + $script:bpCount) adet (REVIEW) isaretli — tarayicida tek tek onaylayin." -ForegroundColor DarkGray
 Write-Host ''

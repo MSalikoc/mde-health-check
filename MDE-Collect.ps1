@@ -152,7 +152,7 @@ function Test-TokenScope {
     Write-Host '    Cozum: kendi public client app kaydinizi olusturup -ClientId ile verin.' -ForegroundColor Yellow
     Write-Host '    Adimlar: README.md > "ClientId hakkinda" bolumu.' -ForegroundColor Yellow
     Write-Host ''
-    $script:Warnings.Add("$Api token'inda eksik izinler: $($missing -join ', ')")
+    $script:Warnings.Add("$Api token is missing required permissions: $($missing -join ', ')")
 }
 
 # ------------------------------------------------------------ REST CALL ----
@@ -291,7 +291,7 @@ if ($skus) {
     $chartRows = @($data.tables.licenses | Where-Object { $map.ContainsKey($_.partNumber) -and $_.assigned -gt 0 })
     if ($chartRows.Count -eq 0) {
         $chartRows = @($data.tables.licenses | Where-Object { $_.assigned -gt 0 } | Select-Object -First 5)
-        if ($chartRows.Count -gt 0) { Write-Skip 'Defender SKU bulunamadi — lisans grafigi en cok atanan SKU lara gore dolduruldu.' }
+        if ($chartRows.Count -gt 0) { Write-Skip 'No Defender SKU found - the licence chart was populated from the most-assigned SKUs instead.' }
     }
     $data.charts['License distribution'] = @(
         $chartRows | Select-Object -First 5 | ForEach-Object {
@@ -487,7 +487,7 @@ if ($asr.Count) {
         $data.tables.asrEvents | Where-Object mode -eq 'Audit' | Sort-Object events -Descending |
         Select-Object -First 5 | ForEach-Object { , @($_.rule, [int]$_.events) })
     Write-Ok "$($data.tables.asrEvents.Count) ASR olay tipi — block: $($blockRules.Count), audit: $($auditRules.Count)"
-    $script:Warnings.Add('ASR: hiç olay üretmeyen kurallar telemetride görünmez — mod tablosunu Intune politika export ile doğrulayın.')
+    $script:Warnings.Add('ASR: rules that generate no events are invisible in telemetry - verify rule modes against the Intune policy export.')
 }
 
 # ================================================== 5 · VULNERABILITIES ===
@@ -755,7 +755,7 @@ if ($pol) {
             @('Warn', $wrn),
             @('Not configured', $off))
         Write-Ok "ASR modlari Intune'dan alindi: $blk block, $aud audit, $wrn warn"
-        $script:Warnings.Add("ASR modlari Intune politikalarindan turetildi ($($asrModes.Count) kural); GPO ile yonetilen kurallar gorunmez.")
+        $script:Warnings.Add("ASR rule modes were derived from Intune policies ($($asrModes.Count) rules); rules managed through Group Policy are not visible.")
     }
     if ($exclusions.Count) {
         $data.tables.avExclusions = @($exclusions | Sort-Object value -Unique)
@@ -866,49 +866,49 @@ function Add-Finding {
 $rate = NumOf 'Onboarding Rate'
 $gap  = NumOf 'Not onboarded'
 if ($null -ne $rate -and $rate -lt 95 -and $gap -gt 0) {
-    Add-Finding "$([int]$gap) cihaz Defender for Endpoint sensoru olmadan calisiyor (kapsam %$([int]$rate))" 'Deployment' 'High'
+    Add-Finding "$([int]$gap) in-scope devices are running without a Defender for Endpoint sensor (coverage $([int]$rate)%)" 'Deployment' 'High'
 }
 foreach ($k in 'Impaired comms', 'No sensor data') {
     $n = NumOf $k
-    if ($n -gt 0) { Add-Finding "$([int]$n) cihaz onboarded gorunuyor ancak telemetri uretmiyor ($k)" 'Deployment' 'High' }
+    if ($n -gt 0) { Add-Finding "$([int]$n) devices appear onboarded but produce no telemetry ($k)" 'Deployment' 'High' }
 }
 $tp = NumOf 'Tamper protection on'
-if ($null -ne $tp -and $tp -lt 100) { Add-Finding "Tamper protection cihazlarin yalnizca %$([int]$tp) uzerinde etkin" 'Protection' $(if ($tp -lt 50) { 'Critical' } else { 'High' }) }
+if ($null -ne $tp -and $tp -lt 100) { Add-Finding "Tamper protection is enabled on only $([int]$tp)% of devices" 'Protection' $(if ($tp -lt 50) { 'Critical' } else { 'High' }) }
 $rt = NumOf 'Real-time protection on'
-if ($null -ne $rt -and $rt -lt 100) { Add-Finding "Real-time protection cihazlarin %$([int]$rt) uzerinde etkin — kalan cihazlar korumasiz" 'Protection' 'Critical' }
+if ($null -ne $rt -and $rt -lt 100) { Add-Finding "Real-time protection is enabled on $([int]$rt)% of devices; the remainder are unprotected" 'Protection' 'Critical' }
 $cp = NumOf 'Cloud protection on'
-if ($null -ne $cp -and $cp -lt 100) { Add-Finding "Cloud-delivered protection cihazlarin %$([int]$cp) uzerinde etkin" 'Protection' 'High' }
+if ($null -ne $cp -and $cp -lt 100) { Add-Finding "Cloud-delivered protection is enabled on $([int]$cp)% of devices" 'Protection' 'High' }
 
 $blk = NumOf 'Rules in block mode'
 $aud = NumOf 'Rules in audit mode'
 if ($null -ne $blk -and $blk -lt 8) {
-    Add-Finding "ASR kurallarindan yalnizca $([int]$blk) tanesi block modunda$(if ($aud -gt 0) { ", $([int]$aud) tanesi audit modunda (goruyor ama engellemiyor)" })" 'ASR' 'High'
+    Add-Finding "Only $([int]$blk) attack surface reduction rules are enforced in block mode$(if ($aud -gt 0) { "; $([int]$aud) remain in audit mode and permit the technique they detect" })" 'ASR' 'High'
 }
 if ($data.tables.avExclusions -and $data.kpi['High-risk exclusions'] -gt 0) {
-    Add-Finding "$($data.kpi['High-risk exclusions']) adet yuksek riskli AV exclusion (surucu koku / kullanici yazabilir dizin / joker)" 'Protection' 'High'
+    Add-Finding "$($data.kpi['High-risk exclusions']) high-risk antivirus exclusions (drive root, user-writable path or wildcard)" 'Protection' 'High'
 }
 
 $crit = NumOf 'Critical CVEs'
-if ($crit -gt 0) { Add-Finding "$([int]$crit) kritik CVE aktif olarak istismar edilebilir durumda" 'TVM' $(if ($crit -ge 20) { 'Critical' } else { 'High' }) }
+if ($crit -gt 0) { Add-Finding "$([int]$crit) critical CVEs are open across the estate" 'TVM' $(if ($crit -ge 20) { 'Critical' } else { 'High' }) }
 $exp = NumOf 'Exposure Score'
-if ($exp -gt 30) { Add-Finding "Exposure score $([int]$exp) — hedef degerin (30) uzerinde" 'TVM' 'Medium' }
+if ($exp -gt 30) { Add-Finding "Exposure score is $([int]$exp), above the recommended threshold of 30" 'TVM' 'Medium' }
 $ss = NumOf 'Secure score for devices'
-if ($null -ne $ss -and $ss -lt 70) { Add-Finding "Microsoft Secure Score %$([int]$ss) — cihaz yapilandirmasinda onemli bosluklar var" 'Governance' 'Medium' }
+if ($null -ne $ss -and $ss -lt 70) { Add-Finding "Microsoft Secure Score for devices is $([int]$ss)%, indicating material configuration gaps" 'Governance' 'Medium' }
 
 if ($data.tables.secureConfiguration) {
     $avgCfg = [math]::Round((@($data.tables.secureConfiguration) | Measure-Object compliance -Average).Average)
-    if ($avgCfg -lt 60) { Add-Finding "Guvenlik yapilandirma uyumu ortalama %$avgCfg — baseline uygulanmamis" 'Governance' 'High' }
+    if ($avgCfg -lt 60) { Add-Finding "Average security configuration compliance is $avgCfg%, indicating the security baseline is not applied" 'Governance' 'High' }
 }
 if ($data.tables.conditionalAccess -and -not $data.tables.conditionalAccess[0].deviceRiskUsed) {
-    Add-Finding 'Cihaz uyumu/riski hicbir Conditional Access politikasinda kullanilmiyor' 'Integration' 'High'
+    Add-Finding 'Device compliance and risk signals are not used by any Conditional Access policy' 'Integration' 'High'
 }
 $ga = @($data.tables.privilegedRoles | Where-Object { $_.role -eq 'Global Administrator' }).members
-if ($ga -gt 5) { Add-Finding "$ga adet kalici Global Administrator hesabi var (PIM disi)" 'Governance' 'High' }
+if ($ga -gt 5) { Add-Finding "$ga standing Global Administrator accounts exist outside Privileged Identity Management" 'Governance' 'High' }
 if ($null -ne $data.tables.customDetections -and @($data.tables.customDetections).Count -eq 0) {
-    Add-Finding 'Hic ozel tespit kurali tanimlanmamis' 'EDR' 'Low'
+    Add-Finding 'No custom detection rules are defined' 'EDR' 'Low'
 }
 $open = NumOf 'Open / in progress'
-if ($open -gt 0) { Add-Finding "$([int]$open) uyari halen acik / islemde" 'EDR' 'Medium' }
+if ($open -gt 0) { Add-Finding "$([int]$open) alerts remain open or in progress" 'EDR' 'Medium' }
 
 if ($findings.Count -gt 0) {
     $i = 1
@@ -932,21 +932,21 @@ if ($findings.Count -gt 0) {
     $data.kpi['Low']      = @($findings | Where-Object { $_.severity -eq 'Low' }).Count
 
     Write-Ok "$($findings.Count) taslak bulgu uretildi"
-    $script:Warnings.Add("Bulgu kaydindaki $($findings.Count) satir esik degerlerden otomatik uretildi — severity, owner ve tarihleri gozden gecirin.")
+    $script:Warnings.Add("$($findings.Count) findings were generated automatically from threshold rules - review severity, owner and target dates.")
 }
 
 # ================================================= 14 · MANUEL ALANLAR ====
 $data.manual = @(
-    'Executive summary, risk statement ve tüm anlatım metinleri',
-    'Bulgu kaydı: severity kararı, effort, owner, hedef tarih',
-    'Olgunluk (current/target) puanları ve gap analizi',
-    'Yol haritası (30/90/365 gün) ve öncelik matrisi',
-    'Threat Analytics kullanım durumu (API yok — portaldan)',
-    'Proxy / TLS bypass doğrulaması (client analyzer çıktısı)',
-    'SOC operasyon modeli, vardiya, playbook ve tatbikat olgunluğu',
-    'Exclusion gerekçeleri ve onay süreci',
-    'Live response / RBAC uygulama pratiği (kim ne yapabiliyor)',
-    'Sentinel connector sağlığı ve ingest hacmi (Azure ARM + Usage tablosu)'
+    'Executive summary, risk statement and all narrative text'
+    'Findings register: severity decision, effort, owner and target dates'
+    'Maturity scoring (current vs target) and gap analysis'
+    'Remediation roadmap (30 / 90 / 365 days) and priority matrix'
+    'Threat Analytics usage (no API - check in the portal)'
+    'Proxy / TLS bypass verification (client analyzer output)'
+    'SOC operating model, shift cover, playbooks and exercise maturity'
+    'Exclusion justifications and approval process'
+    'Live response / RBAC practice in operation (who can do what)'
+    'Sentinel connector health and ingestion volume (Azure ARM + Usage table)'
 )
 $data.meta.warnings = @($script:Warnings)
 

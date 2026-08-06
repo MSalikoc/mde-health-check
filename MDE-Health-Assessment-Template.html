@@ -290,15 +290,15 @@ body.nodata .datahint{display:none}
 
 <div id="bar">
   <b>MDE HEALTH CHECK ASSESSMENT</b>
-  <button onclick="toggleToc()">☰ İçindekiler</button>
-  <button onclick="window.print()">🖨 PDF / Yazdır</button>
-  <button onclick="saveHtml()">💾 HTML olarak kaydet</button>
-  <button class="ghost" onclick="document.body.classList.toggle('guides')">Alan çerçevelerini gizle/göster</button>
-  <button class="ghost" onclick="document.body.classList.toggle('nodata')">Grafik veri tablolarını gizle/göster</button>
-  <button onclick="clearDrafts()">✓ REVIEW işaretlerini kaldır <span class="cnt" id="draftCount">0</span></button>
-  <button class="ghost" onclick="resetDoc()">↺ Sıfırla</button>
+  <button onclick="toggleToc()">☰ Contents</button>
+  <button onclick="window.print()">🖨 Print / PDF</button>
+  <button onclick="saveHtml()">💾 Save as HTML</button>
+  <button class="ghost" onclick="document.body.classList.toggle('guides')">Toggle field outlines</button>
+  <button class="ghost" onclick="document.body.classList.toggle('nodata')">Toggle chart data tables</button>
+  <span class="cnt" id="draftCount" title="Draft texts awaiting review">0 review pending</span>
+  <button class="ghost" onclick="resetDoc()">↺ Reset</button>
   <span class="sp"></span>
-  <span class="hint">Metinlere tıklayıp yazın · Grafik altındaki tabloya sayı girin, grafik anında çizilir · Değişiklikler tarayıcıda otomatik saklanır</span>
+  <span class="hint">Click any text to edit · Enter numbers in the table under each chart · Click a (REVIEW) tag to approve that draft · Changes are saved in this browser</span>
 </div>
 
 <nav id="toc"></nav>
@@ -2470,21 +2470,22 @@ function unwrapDraft(el){
 }
 function updateDraftCount(){
   const el=document.getElementById('draftCount');
-  if(el) el.textContent=document.querySelectorAll('.draft').length;
+  if(el){const n=document.querySelectorAll('.draft').length;el.textContent=n+' review pending';el.style.opacity=n?1:.45;}
 }
-function clearDrafts(){
-  const n=document.querySelectorAll('.draft').length;
-  if(!n){alert('REVIEW işareti kalmadı.');return;}
-  if(!confirm(n+' adet REVIEW işaretli taslak metin var.\n\nHepsini onaylanmış sayıp işaretleri kaldırmak istiyor musunuz?\n(Metinler olduğu gibi kalır, yalnızca sarı işaret gider.)')) return;
-  document.querySelectorAll('.draft').forEach(unwrapDraft);
-  updateDraftCount(); save();
-}
-/* REVIEW rozetine tıklayınca yalnızca o taslağı onayla */
+/* Toplu kaldirma bilerek yok: her taslak tek tek review edilmeli.
+   (REVIEW) rozetine tikla -> yalnizca o taslak onaylanir. Alt+tik da calisir. */
 document.addEventListener('click',e=>{
   const d=e.target.closest?e.target.closest('.draft'):null;
   if(!d) return;
-  const r=d.getBoundingClientRect();
-  if(e.clientX-r.left<60){ unwrapDraft(d); updateDraftCount(); save(); }
+  if(e.altKey){ unwrapDraft(d); updateDraftCount(); save(); return; }
+  /* Cok satirli metinlerde getBoundingClientRect birlesik kutu verir;
+     rozet ilk satirin basindadir -> ilk satir kutusuna gore isabet kontrolu */
+  const rects=d.getClientRects();
+  if(!rects.length) return;
+  const r=rects[0];
+  if(e.clientY>=r.top-2 && e.clientY<=r.bottom+2 && e.clientX>=r.left-2 && e.clientX-r.left<=64){
+    unwrapDraft(d); updateDraftCount(); save();
+  }
 });
 
 /* ===================== İçindekiler ===================== */
@@ -2503,7 +2504,7 @@ function toggleToc(){document.getElementById('toc').classList.toggle('on');}
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-06-ms';
+const DOCVER='2026-08-06-review';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
