@@ -1,30 +1,3 @@
-# Defender for Endpoint — Health Check Assessment
-
-Microsoft Defender for Endpoint sağlık kontrolü / güvenlik değerlendirmesi için rapor şablonu ve otomatik veri toplama araçları.
-
-| Dosya | Ne işe yarar |
-|---|---|
-| `MDE-Health-Assessment-Template.html` | 24 bölümlük boş rapor şablonu — tarayıcıda doğrudan düzenlenebilir, grafikler girilen veriyle canlı çizilir |
-| `MDE-Health-Assessment-SAMPLE.html` | Örnek veriyle doldurulmuş sürüm (kurgusal "Northwind Holding") — nasıl görüneceğini gösterir |
-| `MDE-Health-Assessment-Template.docx` | Aynı raporun Word sürümü |
-| `MDE-Collect.ps1` | Tenant'tan salt-okunur veri toplar → JSON |
-| `MDE-Render.ps1` | JSON'u şablona işler → doldurulmuş rapor |
-| `Run-Assessment.ps1` | İkisini tek komutta çalıştırır (Windows için önerilen) |
-| `sample-data.json` | Tenant olmadan render'ı denemek için örnek veri |
-
-**Windows'ta hızlı başlangıç:** [BASLA-WINDOWS.md](BASLA-WINDOWS.md)
-
-```powershell
-git clone https://github.com/MSalikoc/mde-health-check.git
-cd mde-health-check
-Get-ChildItem *.ps1 | Unblock-File
-.\Run-Assessment.ps1 -TenantId <tenant-guid> -Logo microsoft
-```
-
-> Toplanan veri ve üretilen raporlar `.gitignore` ile dışarıda tutulur — müşteri verisi yanlışlıkla commit edilmez.
-
----
-
 # MDE Health Check — otomatik veri toplama
 
 Rapor şablonunu Microsoft Defender for Endpoint tenant'ından çekilen gerçek veriyle dolduran iki script.
@@ -87,9 +60,11 @@ Delegated (kullanıcı adına) — hepsi **read-only**:
 
 **WindowsDefenderATP** (opsiyonel, TVM için): `Vulnerability.Read`, `SecurityRecommendation.Read`, `Ti.Read`, `Score.Read`
 
-### ClientId hakkında
+### ClientId — çoğu tenant'ta app kaydı ZORUNLU
 
-Varsayılan olarak Azure CLI'nin public client ID'si kullanılır (`04b07795-…`); çoğu tenant'ta hem Graph hem de Defender API için pre-authorized'dır. Tenant'ınızda `AADSTS65001`/`invalid_client` hatası alırsanız **kendi public client app kaydınızı** oluşturun:
+Varsayılan ClientId (Azure CLI, `04b07795-…`) yalnızca dizin okuma için yetkilidir; **Defender ve güvenlik izinlerine sahip değildir.** Onunla çalıştırırsanız tenant adı ve lisanslar gelir, geri kalan her çağrı `403 Forbidden` döner. Script bunu baştan tespit edip eksik izinleri listeler.
+
+Kalıcı çözüm — **kendi public client app kaydınız**:
 
 1. Entra ID → App registrations → New registration
 2. Supported account types: Single tenant

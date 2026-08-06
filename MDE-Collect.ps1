@@ -110,8 +110,49 @@ function Get-Token {
     $res = if ($Api -eq 'graph') { 'https://graph.microsoft.com' } else { 'https://api.securitycenter.microsoft.com' }
     if (-not $script:Tokens.ContainsKey($Api)) {
         $script:Tokens[$Api] = Get-DeviceCodeToken -Resource $res
+        Test-TokenScope -Api $Api -Token $script:Tokens[$Api]
     }
     return $script:Tokens[$Api]
+}
+
+# Token'daki izinleri (scp claim) coz ve eksikleri bastan bildir
+function Test-TokenScope {
+    param([string]$Api, [string]$Token)
+
+    $required = if ($Api -eq 'graph') {
+        @('ThreatHunting.Read.All', 'SecurityEvents.Read.All', 'SecurityAlert.Read.All',
+          'SecurityIncident.Read.All', 'CustomDetection.Read.All',
+          'DeviceManagementConfiguration.Read.All', 'Directory.Read.All',
+          'Organization.Read.All', 'Policy.Read.All', 'RoleManagement.Read.Directory')
+    } else {
+        @('Vulnerability.Read', 'SecurityRecommendation.Read', 'Score.Read', 'Ti.Read')
+    }
+
+    $scopes = @()
+    try {
+        $payload = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')
+        switch ($payload.Length % 4) { 2 { $payload += '==' } 3 { $payload += '=' } }
+        $claims = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
+        $scopes = @($claims.scp -split ' ' | Where-Object { $_ })
+        if ($claims.upn) { Write-Verbose "Oturum: $($claims.upn)" }
+    } catch {
+        Write-Verbose 'Token cozulemedi, izin denetimi atlaniyor.'
+        return
+    }
+
+    $missing = @($required | Where-Object { $_ -notin $scopes })
+    if ($missing.Count -eq 0) {
+        Write-Ok "$Api token izinleri tam ($($scopes.Count) scope)"
+        return
+    }
+
+    Write-Host ''
+    Write-Host "  ! $Api token'inda gerekli izinler YOK — bu bolumler 403 donecek:" -ForegroundColor Red
+    $missing | ForEach-Object { Write-Host "      - $_" -ForegroundColor DarkYellow }
+    Write-Host '    Cozum: kendi public client app kaydinizi olusturup -ClientId ile verin.' -ForegroundColor Yellow
+    Write-Host '    Adimlar: README.md > "ClientId hakkinda" bolumu.' -ForegroundColor Yellow
+    Write-Host ''
+    $script:Warnings.Add("$Api token'inda eksik izinler: $($missing -join ', ')")
 }
 
 # ------------------------------------------------------------ REST CALL ----
@@ -743,6 +784,21 @@ if ($script:Warnings.Count) {
     Write-Host ''
     Write-Host '  Uyarılar:' -ForegroundColor Yellow
     $script:Warnings | ForEach-Object { Write-Host "   - $_" -ForegroundColor DarkYellow }
+}
+
+# Toplu 403 → izin sorunu; net yonlendirme ver
+$forbidden = @($script:Warnings | Where-Object { $_ -match '403|Forbidden|eksik izin' })
+if ($forbidden.Count -ge 3) {
+    Write-Host ''
+    Write-Host '  ┌──────────────────────────────────────────────────────────────┐' -ForegroundColor Red
+    Write-Host '  │ Cagrilarin cogu 403 dondu: token gerekli izinlere sahip degil │' -ForegroundColor Red
+    Write-Host '  └──────────────────────────────────────────────────────────────┘' -ForegroundColor Red
+    Write-Host '  Varsayilan ClientId (Azure CLI) Defender/guvenlik izinlerine yetkili degildir.' -ForegroundColor Yellow
+    Write-Host '  Kendi public client app kaydinizi olusturun:' -ForegroundColor Yellow
+    Write-Host '    1. entra.microsoft.com > App registrations > New registration (Single tenant)' -ForegroundColor Gray
+    Write-Host '    2. Authentication > Allow public client flows: Yes' -ForegroundColor Gray
+    Write-Host '    3. API permissions > Delegated > README.md listesi > Grant admin consent' -ForegroundColor Gray
+    Write-Host '    4. Yeniden calistirin: -ClientId <yeni app id>' -ForegroundColor Gray
 }
 Write-Host ''
 Write-Host '  Sonraki adım:' -ForegroundColor White
