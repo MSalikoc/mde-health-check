@@ -7,9 +7,8 @@ Every generated comment is marked **(REVIEW)**. The consultant reads and approve
 | File | Purpose |
 |---|---|
 | `New-MdeApp.ps1` | **Prerequisite step.** Creates the Entra app registration, permissions and admin consent |
-| `MDE-Collect.ps1` | Collects tenant data → `mde-assessment-data.json` |
-| `MDE-Render.ps1` | Merges the JSON into the template → populated report |
-| `Run-Assessment.ps1` | Runs collection and rendering in a single command |
+| `MDE-Collect.ps1` | **Runs at the customer.** Collects tenant data → JSON only |
+| `MDE-Render.ps1` | **Runs at your end.** Merges the JSON into the template → report |
 | `Test-Parse.ps1` | Syntax check (run this first when troubleshooting) |
 | `MDE-Health-Assessment-Template.html` | Empty 24-section report template |
 | `MDE-Health-Assessment-SAMPLE.html` | Version filled with sample data (fictional Northwind Holding) |
@@ -105,41 +104,39 @@ It is idempotent: run it again and it finds the existing registration and fills 
 
 > Consent can take a minute or two to propagate. If you still get 403 immediately afterwards, try once more.
 
-## Step 4 · Collect the data and produce the report
+## Step 4 · Collect the data (customer environment)
 
-One command — collects, renders and opens the report in the browser. You do not need `-ClientId`; `.mde-app.json` is read automatically:
+This is the only script that runs at the customer. It produces **a single JSON file** and nothing else — no report is generated and no browser is opened, so the customer never sees an unreviewed draft.
 
 ```powershell
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID
+.\MDE-Collect.ps1 -TenantId YOUR-TENANT-ID
 ```
 
-A device code appears again; this time sign in with the account holding **Security Reader + Global Reader** (it can be the same account).
+A device code appears; sign in with the account holding **Security Reader + Global Reader**.
+
+Output: `mde-data-<tenant>-<date>.json`. The console prints how many KPIs, charts and tables were collected plus any warnings, so you can confirm the collection worked without producing a report.
 
 **Start with a narrow scope on the first run** — it finishes in a minute or two and surfaces permission problems immediately:
 
 ```powershell
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -GraphOnly -AlertDays 7 -EventDays 7
+.\MDE-Collect.ps1 -TenantId YOUR-TENANT-ID -GraphOnly -AlertDays 7 -EventDays 7
 ```
 
-### Running the steps separately
+Add `-RawDumpPath .\raw` only while troubleshooting: it writes the raw output of every API and KQL call to disk, including device and user names.
+
+Take the JSON file with you. It is the only artefact needed for the report.
+
+## Step 5 · Produce the report (your environment)
 
 ```powershell
-.\MDE-Collect.ps1 -TenantId YOUR-TENANT-ID -RawDumpPath .\raw -Verbose
+.\MDE-Render.ps1 -DataFile .\mde-data-contoso-20260807.json -ClientName "Contoso A.S."
 ```
 
-```powershell
-.\MDE-Render.ps1 -DataFile .\mde-assessment-data.json -Template .\MDE-Health-Assessment-Template.html -ClientName "Contoso A.S."
-```
+The template is picked up automatically from the script folder; use `-Template` only to point at a different one. The report is written next to the JSON and opened in your browser.
 
-## Step 5 · Finish the report
+The JSON is plain text and editable — correct anything the collector got wrong, or fill in values it could not reach, then run the same command again.
 
-The folder will contain:
-
-- `mde-assessment-data.json` — the collected raw data (**editable by hand**)
-- `raw\` — raw output of every API/KQL call (troubleshooting)
-- `<Client>-MDE-Assessment-<date>.html` — the report
-
-Open the report in a browser:
+## Step 6 · Finish the report
 
 1. The counter in the toolbar shows how many **(REVIEW)** drafts remain
 2. Read each draft; if it is correct, **click the (REVIEW) tag** (or `Alt+click` anywhere in the text) — the mark disappears, the text stays
@@ -149,42 +146,29 @@ Open the report in a browser:
 
 > There is deliberately no "clear all" button. Every draft is meant to be read individually.
 
-To correct the JSON by hand and re-render the report:
-
-```powershell
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -SkipCollect
-```
-
 ---
 
 # Parameters
 
-### Run-Assessment.ps1
+### MDE-Collect.ps1
 
 | Parameter | Description |
 |---|---|
 | `-TenantId` | Tenant GUID or `xxx.onmicrosoft.com` (required) |
 | `-ClientId` | App registration ID (read from `.mde-app.json` when omitted) |
-| `-ClientName "Contoso A.S."` | Client name on the cover (tenant name when omitted) |
-| `-Logo` | Cover logo. Default `template` = keep the logo in the template file, which already ships with the Microsoft logo. Use `microsoft` only to force it onto a template carrying a different logo, or `none` to remove it |
-| `-CreateApp` | Create the app registration in the same run (Step 3 + 4 together) |
 | `-GraphOnly` | Skip `api.securitycenter.microsoft.com` calls |
 | `-AlertDays 90` / `-EventDays 30` | Telemetry windows |
-| `-SkipCollect` | Skip collection and re-render from the existing JSON |
-| `-Template <path>` | Use a different template file |
-
-### MDE-Collect.ps1 (additional)
-
-| Parameter | Description |
-|---|---|
-| `-RawDumpPath .\raw` | Write raw API/KQL output to disk |
+| `-RawDumpPath .\raw` | Write raw API/KQL output to disk (troubleshooting only) |
 | `-OutFile` | JSON output path |
 | `-Verbose` | Detailed progress |
 
-### MDE-Render.ps1 (additional)
+### MDE-Render.ps1
 
 | Parameter | Description |
 |---|---|
+| `-DataFile` | Collected JSON (required) |
+| `-ClientName "Contoso A.S."` | Client name on the cover (tenant name when omitted) |
+| `-Template <path>` | Template file (auto-detected when omitted) |
 | `-HideDataTables` | Start with chart data tables hidden (cleaner for delivery) |
 | `-OutFile` | Report file name |
 

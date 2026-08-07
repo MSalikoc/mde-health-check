@@ -16,7 +16,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$DataFile,
-    [Parameter(Mandatory)][string]$Template,
+    # Bos birakilirsa script'in yanindaki (veya bir ust klasordeki) sablon kullanilir
+    [string]$Template,
     [string]$OutFile,
     [string]$ClientName,          # boşsa JSON'daki tenant adı kullanılır
     [switch]$HideDataTables,      # grafik veri tablolarını gizli başlat
@@ -28,6 +29,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+
+if (-not $Template) {
+    $Template = @(
+        (Join-Path $PSScriptRoot 'MDE-Health-Assessment-Template.html'),
+        (Join-Path (Split-Path $PSScriptRoot -Parent) 'MDE-Health-Assessment-Template.html')
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $Template) {
+        throw 'Sablon bulunamadi. MDE-Health-Assessment-Template.html dosyasini bu klasore koyun veya -Template ile yol verin.'
+    }
+}
 
 $d = Get-Content $DataFile -Raw -Encoding utf8 | ConvertFrom-Json
 $html = Get-Content $Template -Raw -Encoding utf8
@@ -984,3 +995,4 @@ Write-Host "  Rapor yazıldı: $OutFile" -ForegroundColor Green
 Write-Host "  Dolduruldu: $($filled.charts) grafik, $($filled.kpi) KPI, $($filled.rows) tablo satırı, $($filled.fields) alan" -ForegroundColor DarkGray
 Write-Host "  Taslak metin: $($script:draftCount + $script:bpCount) adet (REVIEW) isaretli — tarayicida tek tek onaylayin." -ForegroundColor DarkGray
 Write-Host ''
+try { Start-Process (Resolve-Path $OutFile) } catch { }

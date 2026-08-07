@@ -28,16 +28,21 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 ```
 
 ```powershell
-# 5) Toplama + rapor (Security Reader + Global Reader ile giris)
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID
+# 5) MUSTERI ORTAMI - sadece JSON uretir, rapor olusmaz
+.\MDE-Collect.ps1 -TenantId YOUR-TENANT-ID
 ```
 
 ```powershell
 # Ilk deneme icin dar kapsam (1-2 dakika)
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -GraphOnly -AlertDays 7 -EventDays 7
+.\MDE-Collect.ps1 -TenantId YOUR-TENANT-ID -GraphOnly -AlertDays 7 -EventDays 7
 ```
 
-> `YOUR-TENANT-ID` yerine kendi tenant GUID'inizi veya `contoso.onmicrosoft.com` alan adınızı yazın. Çevresine `< >` koymayın — kabukta bunlar yönlendirme operatörüdür ve komut çalışmadan hata verir.
+```powershell
+# 6) KENDI ORTAMINIZ - JSON'dan raporu uretir ve tarayicida acar
+.\MDE-Render.ps1 -DataFile .\mde-data-contoso-20260807.json -ClientName "Contoso A.S."
+```
+
+> Rapor müşteri ortamında **üretilmez**. Oradan çıkan tek dosya JSON'dur; taslak metinleri müşteri görmez.
 
 ## Sonra
 
@@ -48,8 +53,4 @@ Rapor tarayıcıda açılır. Sağ üstteki sayaç kaç **(REVIEW)** işaretli t
 - Gri italik alanlar otomatik doldurulamayanlar — elle yazın
 - Sayaç sıfırlanınca **Ctrl+P → PDF olarak kaydet**
 
-JSON'u elle düzeltip raporu yeniden üretmek:
-
-```powershell
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -SkipCollect
-```
+JSON düz metindir — toplayıcının yanlış aldığı bir şeyi düzeltip aynı komutu tekrar çalıştırabilirsiniz.

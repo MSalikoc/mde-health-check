@@ -26,7 +26,8 @@ param(
     # client app kaydınız varsa onu verin (redirect URI gerekmez, device code).
     [string]$ClientId = '04b07795-8ddb-461a-bbee-02f9e1bf7b46',
 
-    [string]$OutFile = './mde-assessment-data.json',
+    # Bos birakilirsa: mde-data-<tenant>-<yyyyMMdd>.json
+    [string]$OutFile,
 
     # Telemetri pencereleri
     [int]$AlertDays = 90,
@@ -40,6 +41,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $OutFile) {
+    $slug = ($TenantId -replace '\.onmicrosoft\.com$', '' -replace '[^\w\-]', '')
+    if ($slug.Length -gt 20) { $slug = $slug.Substring(0, 8) }
+    $OutFile = "./mde-data-$slug-$(Get-Date -Format yyyyMMdd).json"
+}
+
 # Windows konsolunda Türkçe karakterler ve simgeler bozulmasın
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
@@ -242,7 +250,8 @@ $data = [ordered]@{
         tenantId     = $TenantId
         alertWindow  = "$AlertDays days"
         eventWindow  = "$EventDays days"
-        collector    = 'MDE-Collect.ps1 v1.0'
+        collector     = 'MDE-Collect.ps1 v1.1'
+        schemaVersion = 1
     }
     kpi    = [ordered]@{}
     charts = [ordered]@{}
@@ -976,6 +985,8 @@ if ($forbidden.Count -ge 3) {
     Write-Host '    4. Yeniden calistirin: -ClientId <yeni app id>' -ForegroundColor Gray
 }
 Write-Host ''
-Write-Host '  Sonraki adım:' -ForegroundColor White
-Write-Host "   ./MDE-Render.ps1 -DataFile $OutFile -Template ../MDE-Health-Assessment-Template.html" -ForegroundColor Gray
+Write-Host ''
+Write-Host '  Bu makinede rapor uretilmez. Tek cikti yukaridaki JSON dosyasidir.' -ForegroundColor White
+Write-Host '  JSON dosyasini kendi ortaminiza alip su komutla raporu uretin:' -ForegroundColor DarkGray
+Write-Host "     .\MDE-Render.ps1 -DataFile $(Split-Path $OutFile -Leaf) -ClientName `"<Musteri>`"" -ForegroundColor Gray
 Write-Host ''
