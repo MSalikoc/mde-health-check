@@ -120,7 +120,7 @@ A device code appears again; this time sign in with the account holding **Securi
 ### Running the steps separately
 
 ```powershell
-.\MDE-Collect.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -RawDumpPath .\raw -Verbose
+.\MDE-Collect.ps1 -TenantId ********************* -RawDumpPath .\raw -Verbose
 ```
 
 ```powershell
