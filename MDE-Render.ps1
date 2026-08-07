@@ -535,6 +535,7 @@ if ($d.tables.agentVersions) {
     }
 }
 
+
 # ------------------------------------------------- LISANS HAK KONTROLU --
 function Lic-Row {
     param($L, [string]$Note)
@@ -1170,6 +1171,189 @@ if ($tp) {
     $html = [regex]::Replace($html,
         '(<div class="v f" contenteditable data-ph="[^"]*">)(?:[^<]*)(</div><div class="k">Tamper protection on</div>)',
         { param($m) "$($m.Groups[1].Value)$($tp.pct)%$($m.Groups[2].Value)" }, 1)
+}
+
+# ============================================================================
+#  ANA KONTROL LISTESI (Ek A) - toplanan veriden belirlenebilenler
+#  Belirlenemeyenler "Not assessed" kalir; uydurma yapilmaz.
+# ============================================================================
+function Inv-Cov {
+    param([string]$Pattern)
+    $rows = @($d.tables.deviceInventory | Where-Object { $_.platform -match $Pattern })
+    if ($rows.Count -eq 0) { return $null }
+    $disc = ($rows | Measure-Object discovered -Sum).Sum
+    $onb  = ($rows | Measure-Object onboarded -Sum).Sum
+    if ($disc -eq 0) { return $null }
+    [pscustomobject]@{ pct = [math]::Round(100 * $onb / $disc); disc = $disc; onb = $onb }
+}
+function Chk-Cfg {
+    param([string]$Scid, [int]$PassAt = 95, [int]$PartialAt = 60)
+    $c = Cfg-Cell $Scid
+    if (-not $c) { return $null }
+    $st = if ($c.pct -ge $PassAt) { 'pass' } elseif ($c.pct -ge $PartialAt) { 'partial' } else { 'fail' }
+    [pscustomobject]@{ status = $st; evidence = $c.text }
+}
+function Chk-Cov {
+    param([string]$Pattern, [int]$PassAt = 95)
+    $c = Inv-Cov $Pattern
+    if (-not $c) { return $null }
+    $st = if ($c.pct -ge $PassAt) { 'pass' } elseif ($c.pct -ge 50) { 'partial' } else { 'fail' }
+    [pscustomobject]@{ status = $st; evidence = "$($c.onb) of $($c.disc) onboarded ($($c.pct)%)" }
+}
+
+$CHK = @{}
+function Add-Chk { param([string]$Id, $R) if ($R) { $CHK[$Id] = $R } }
+
+Add-Chk 'A1'  (Chk-Cov 'Windows 1[01]')
+Add-Chk 'A2'  (Chk-Cov 'Windows Server')
+Add-Chk 'A3'  (Chk-Cov 'macOS')
+Add-Chk 'A4'  (Chk-Cov 'Linux')
+Add-Chk 'A5'  (Chk-Cov 'iOS|Android')
+Add-Chk 'A12' $(
+    $sh = Kpi-Num 'Sensor health'
+    if ($null -ne $sh) { [pscustomobject]@{ status = $(if ($sh -ge 95) { 'pass' } elseif ($sh -ge 80) { 'partial' } else { 'fail' }); evidence = "Sensor health $sh%" } })
+Add-Chk 'A16' $(
+    if ($d.tables.agentVersions) {
+        $behind = (@($d.tables.agentVersions) | Measure-Object behind -Sum).Sum
+        [pscustomobject]@{ status = $(if ($behind -eq 0) { 'pass' } elseif ($behind -lt 20) { 'partial' } else { 'fail' }); evidence = "$behind devices behind the newest build" } })
+Add-Chk 'B3'  $(
+    if ($lic.p2 -or $lic.p1) {
+        $n = 0; if ($lic.p2) { $n += $lic.p2.assigned }; if ($lic.p1) { $n += $lic.p1.assigned }
+        [pscustomobject]@{ status = 'partial'; evidence = "$n Defender entitlements assigned - compare against onboarded devices" } })
+Add-Chk 'B6'  $(
+    $groups = @($d.raw.machineGroups | Where-Object { $_.MachineGroup })
+    [pscustomobject]@{ status = $(if ($groups.Count -gt 0) { 'pass' } else { 'fail' }); evidence = $(if ($groups.Count) { "$($groups.Count) device groups in use" } else { 'No device groups configured - all devices sit in the default group' }) })
+
+Add-Chk 'C1'  (Chk-Cfg 'scid-2010')
+Add-Chk 'C2'  (Chk-Cfg 'scid-2012')
+Add-Chk 'C3'  (Chk-Cfg 'scid-91')
+Add-Chk 'C4'  (Chk-Cfg 'scid-2016')
+Add-Chk 'C8'  (Chk-Cfg 'scid-2013')
+Add-Chk 'C9'  (Chk-Cfg 'scid-2003')
+Add-Chk 'C10' (Chk-Cfg 'scid-2004')
+Add-Chk 'C11' (Chk-Cfg 'scid-2011')
+Add-Chk 'C14' (Chk-Cfg 'scid-89')
+Add-Chk 'C15' (Chk-Cfg 'scid-92')
+
+Add-Chk 'D1'  $(
+    if ($d.tables.asrRules) {
+        $n = @($d.tables.asrRules).Count
+        [pscustomobject]@{ status = $(if ($n -ge 19) { 'pass' } elseif ($n -ge 10) { 'partial' } else { 'fail' }); evidence = "$n of 20 rules configured in Intune" } })
+Add-Chk 'D2'  $(
+    if ($d.tables.asrRules) {
+        $blk = @($d.tables.asrRules | Where-Object { $_.mode -eq 'Block' }).Count
+        [pscustomobject]@{ status = $(if ($blk -ge 14) { 'pass' } elseif ($blk -ge 6) { 'partial' } else { 'fail' }); evidence = "$blk rules in block mode" } })
+Add-Chk 'D5'  (Chk-Cfg 'scid-2021')
+Add-Chk 'D6'  (Chk-Cfg 'scid-96')
+Add-Chk 'D10' (Chk-Cfg 'scid-2515')
+Add-Chk 'D12' (Chk-Cfg 'scid-2080')
+Add-Chk 'D13' (Chk-Cfg 'scid-2070')
+Add-Chk 'D14' (Chk-Cfg 'scid-2090')
+
+Add-Chk 'E1'  $(
+    $tv = Kpi-Num 'Total vulnerabilities'
+    if ($tv) { [pscustomobject]@{ status = 'pass'; evidence = "$($d.kpi.'Total vulnerabilities') vulnerability instances reported" } })
+Add-Chk 'E7'  $(
+    $sw = Kpi-Num 'Software products'
+    if ($sw) { [pscustomobject]@{ status = 'pass'; evidence = "$($d.kpi.'Software products') products in inventory" } })
+Add-Chk 'E12' $(
+    $ss = Kpi-Num 'Secure score for devices'
+    if ($ss) { [pscustomobject]@{ status = $(if ($ss -ge 80) { 'pass' } elseif ($ss -ge 60) { 'partial' } else { 'fail' }); evidence = "Secure Score $ss%" } })
+
+Add-Chk 'F1'  (Chk-Cfg 'scid-2000')
+Add-Chk 'F11' $(
+    $n = @($d.tables.customDetections).Count
+    [pscustomobject]@{ status = $(if ($n -ge 5) { 'pass' } elseif ($n -gt 0) { 'partial' } else { 'fail' }); evidence = "$n custom detection rules" })
+Add-Chk 'F2'  $(
+    $tot = Kpi-Num 'Total alerts (90d)'; $res = Kpi-Num 'Resolved'
+    if ($tot) {
+        $pct = [math]::Round(100 * $res / $tot)
+        [pscustomobject]@{ status = $(if ($pct -ge 90) { 'pass' } elseif ($pct -ge 50) { 'partial' } else { 'fail' }); evidence = "$res of $tot alerts resolved ($pct%)" } })
+
+Add-Chk 'G2'  $(
+    if ($d.tables.intunePolicies) { [pscustomobject]@{ status = 'pass'; evidence = "$(@($d.tables.intunePolicies).Count) Intune configuration policies read" } })
+Add-Chk 'G3'  $(
+    if ($d.tables.conditionalAccess) {
+        $ca = @($d.tables.conditionalAccess)[0]
+        [pscustomobject]@{ status = $(if ($ca.deviceRiskUsed) { 'pass' } else { 'fail' }); evidence = "$($ca.deviceComplianceCA) of $($ca.enabledPolicies) enabled policies require device compliance" } })
+Add-Chk 'H2'  $(
+    if ($null -ne $d.meta.pimEligibleAssignments) {
+        $n = [int]$d.meta.pimEligibleAssignments
+        [pscustomobject]@{ status = $(if ($n -gt 0) { 'partial' } else { 'fail' }); evidence = "$n PIM-eligible role assignments" } })
+
+if ($CHK.Count -gt 0) {
+    $script:chkMap = $CHK
+    $script:chkFilled = 0
+    $script:html = [regex]::Replace($script:html, '(?s)<tr><td>([A-H]\d{1,2})</td>(?:(?!</tr>).)*</tr>', {
+        param($rm)
+        $row = $rm.Value
+        $id = [regex]::Match($row, '<tr><td>([A-H]\d{1,2})</td>').Groups[1].Value
+        if (-not $script:chkMap.ContainsKey($id)) { return $row }
+        $e = $script:chkMap[$id]
+        $row = $row -replace '<td class="sel"></td>', ('<td class="sel">' + (New-Select 'st' $ST_OPTS $e.status) + '</td>')
+        $row = [regex]::Replace($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>', {
+            param($cm) "<td$($cm.Groups[1].Value)><span class=`"draft`">$(Esc $e.evidence)</span></td>"
+        }, 1)
+        $script:chkFilled++
+        return $row
+    })
+    $filled.rows += $script:chkFilled
+}
+
+# ------------------------------------------- MISCONFIGURATION FINDINGS ----
+$worst = @($cfgAll | Where-Object { $_.applicable -ge 50 } | Sort-Object compliance | Select-Object -First 6)
+if ($worst.Count) {
+    $script:misRows = $worst
+    $script:misIdx = 0
+    $rxMis = [regex]'(?s)(<h3[^>]*>Misconfiguration Findings</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
+    if ($rxMis.IsMatch($script:html)) {
+        $script:html = $rxMis.Replace($script:html, {
+            param($m)
+            $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
+                param($rm)
+                if ($script:misIdx -ge $script:misRows.Count) { return $rm.Value }
+                $c = $script:misRows[$script:misIdx]; $script:misIdx++
+                $nonCompliant = [int]$c.applicable - [int]$c.compliant
+                $sev = if ($c.compliance -lt 25) { 'high' } elseif ($c.compliance -lt 60) { 'medium' } else { 'low' }
+                $script:filled.rows++
+                "<tr><td class=`"f`" contenteditable data-ph=`"––`"><span class=`"draft`">$(Esc $c.name)</span></td>" +
+                "<td class=`"num f`" contenteditable data-ph=`"––`">$nonCompliant</td>" +
+                "<td class=`"sev`">$(New-Select 'sev' $SEV_OPTS $sev)</td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`"><span class=`"draft`">$(Esc "Currently compliant on $([math]::Round([double]$c.compliance))% of $($c.applicable) applicable devices ($($c.id))")</span></td></tr>"
+            })
+            "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
+        }, 1)
+    }
+}
+
+# ------------------------------------------------ DEVICE GROUPS & TAGGING -
+$mg = @($d.raw.machineGroups)
+if ($mg.Count) {
+    $named = @($mg | Where-Object { $_.MachineGroup } | Group-Object MachineGroup |
+               ForEach-Object { [pscustomobject]@{ name = $_.Name; devices = ($_.Group | Measure-Object Devices -Sum).Sum } })
+    $ungrouped = ($mg | Where-Object { -not $_.MachineGroup } | Measure-Object Devices -Sum).Sum
+    $script:dgRows = @($named) + @([pscustomobject]@{ name = 'Ungrouped devices'; devices = $ungrouped })
+    $script:dgIdx = 0
+    $rxDg = [regex]'(?s)(<h3[^>]*>Device Groups &amp; Tagging</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
+    if ($rxDg.IsMatch($script:html)) {
+        $script:html = $rxDg.Replace($script:html, {
+            param($m)
+            $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
+                param($rm)
+                if ($script:dgIdx -ge $script:dgRows.Count) { return $rm.Value }
+                $g = $script:dgRows[$script:dgIdx]; $script:dgIdx++
+                if (-not $g.devices) { return $rm.Value }
+                $script:filled.rows++
+                $note = if ($g.name -eq 'Ungrouped devices') { 'Default group - no RBAC scoping or automation level can be applied separately' } else { 'Confirm the membership rule and automation level' }
+                "<tr><td class=`"f`" contenteditable data-ph=`"––`"><span class=`"draft`">$(Esc $g.name)</span></td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`"></td>" +
+                "<td class=`"num f`" contenteditable data-ph=`"––`">$($g.devices)</td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`"></td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`"><span class=`"draft`">$(Esc $note)</span></td></tr>"
+            })
+            "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
+        }, 1)
+    }
 }
 
 # ---------------------------------------------------- BOLUM 01 TABLOLARI --
