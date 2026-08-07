@@ -54,6 +54,111 @@ function Esc([string]$s) { $s -replace '&', '&amp;' -replace '<', '&lt;' -replac
 
 # ------------------------------------------------------------- GRAFİKLER --
 # <div class="chart" data-type="..."> … <div class="ct">Başlık</div> … <table class="data"> … </table> … </div>
+
+# ============================================================================
+#  TURETILMIS VERI
+#  Toplayicinin uretemedigi ama toplanan veriden hesaplanabilen alanlar.
+#  Grafik doldurma pasindan ONCE calisir ki $d.charts'a eklenenler de islensin.
+# ============================================================================
+$cfgAll = @($d.tables.secureConfiguration)
+
+function Sub-Avg {
+    param([string]$Subcategory)
+    $rows = @($cfgAll | Where-Object { $_.subcategory -eq $Subcategory })
+    if ($rows.Count -eq 0) { return $null }
+    return [math]::Round(($rows | Measure-Object compliance -Average).Average)
+}
+function Scid-Pct {
+    param([string]$Id)
+    $r = $cfgAll | Where-Object { $_.id -eq $Id } | Select-Object -First 1
+    if ($r) { [math]::Round([double]$r.compliance) } else { $null }
+}
+# ConvertFrom-Json nesnesine YENI ozellik atanamaz; varsa yaz, yoksa ekle
+function Set-Chart {
+    param([string]$Name, $Series)
+    if ($d.charts.PSObject.Properties.Name -contains $Name) { $d.charts.$Name = $Series }
+    else { $d.charts | Add-Member -NotePropertyName $Name -NotePropertyValue $Series -Force }
+}
+
+function Kpi-Num {
+    param([string]$Name)
+    $v = "$($d.kpi.$Name)" -replace '[^0-9.]', ''
+    if ($v) { [double]$v } else { $null }
+}
+
+# --- toplayicinin yanlis KPI'sindan dogan bulgulari ayikla ---
+if ($d.tables.findings) {
+    $tamperPct = Scid-Pct 'scid-2003'
+    if ($null -ne $tamperPct -and $tamperPct -ge 95) {
+        $before = @($d.tables.findings).Count
+        $d.tables.findings = @($d.tables.findings | Where-Object { $_.finding -notmatch 'Tamper protection is enabled on only' })
+        $after = @($d.tables.findings).Count
+        if ($after -lt $before) {
+            $i = 1
+            foreach ($f in $d.tables.findings) { $f.id = 'F-{0:D2}' -f $i; $i++ }
+            foreach ($sev in 'Critical','High','Medium','Low') {
+                $d.kpi.$sev = @($d.tables.findings | Where-Object { $_.severity -eq $sev }).Count
+            }
+            $d.kpi.'Critical Findings' = @($d.tables.findings | Where-Object { $_.severity -eq 'Critical' }).Count
+            Set-Chart 'Findings by severity' @(
+                'Critical','High','Medium','Low' | ForEach-Object {
+                    $sv = $_
+                    Write-Output -NoEnumerate @($sv, @($d.tables.findings | Where-Object { $_.severity -eq $sv }).Count)
+                })
+        }
+    }
+    # bulgu domain dagilimi (toplayicida bos geliyordu)
+    $byDom = @($d.tables.findings | Where-Object { $_.domain } | Group-Object domain |
+               Sort-Object Count -Descending | Select-Object -First 6)
+    if ($byDom.Count) {
+        Set-Chart 'Findings by domain' @($byDom | ForEach-Object {
+            Write-Output -NoEnumerate @($_.Name, $_.Count)
+        })
+    }
+}
+
+# --- domain olgunluk puanlari (yalnizca savunulabilir olanlar) ---
+$dom = [ordered]@{
+    'Deployment & Onboarding'    = Kpi-Num 'Onboarding Rate'
+    'Next-Generation Protection' = Sub-Avg 'Antivirus'
+    'Attack Surface Reduction'   = Sub-Avg 'Attack Surface Reduction'
+    'Vulnerability Management'   = $null
+    'EDR & Automation'           = Sub-Avg 'EDR'
+    'Identity & Access (RBAC)'   = $null
+    'Integration & SIEM'         = $null
+    'Security Operations'        = $null
+}
+$tot = Kpi-Num 'Total alerts (90d)'
+$res = Kpi-Num 'Resolved'
+if ($tot -gt 0) { $dom['Security Operations'] = [math]::Round(100 * $res / $tot) }
+$ss = Kpi-Num 'Secure score for devices'
+if ($ss) { $dom['Vulnerability Management'] = [math]::Round($ss) }
+
+if (@($dom.Values | Where-Object { $null -ne $_ }).Count -gt 0) {
+    $series = @($dom.Keys | ForEach-Object { Write-Output -NoEnumerate @($_, $dom[$_]) })
+    # sablondaki baslik en-dash kullaniyor
+    Set-Chart 'Domain maturity score (0–100)' $series
+}
+
+# --- lisanslardan MDE plan hakki ---
+function Sku-Sum {
+    param([string]$Pattern)
+    $rows = @($d.tables.licenses | Where-Object { $_.partNumber -match $Pattern })
+    if ($rows.Count -eq 0) { return $null }
+    return [pscustomobject]@{
+        purchased = ($rows | Measure-Object purchased -Sum).Sum
+        assigned  = ($rows | Measure-Object assigned -Sum).Sum
+        available = ($rows | Measure-Object available -Sum).Sum
+        skus      = (($rows | ForEach-Object { $_.partNumber }) -join ', ')
+    }
+}
+$lic = @{
+    p2  = Sku-Sum 'E5|WIN_DEF_ATP|DEFENDER_ENDPOINT_P2|IDENTITY_THREAT'
+    p1  = Sku-Sum '_E3|SPE_E3|DEFENDER_ENDPOINT_P1'
+    bp  = Sku-Sum 'Business.?.?Premium'
+    tvm = Sku-Sum 'TVM_Premium'
+}
+
 $rxChart = [regex]'(?s)<div class="chart"[^>]*>.*?</table>\s*(?:<div class="datahint">.*?</div>\s*)?</div>'
 $html = $rxChart.Replace($html, {
     param($m)
@@ -314,6 +419,74 @@ if ($d.tables.findings) {
         return $row
     })
 }
+
+
+# --------------------------------------------- TOP FINDINGS / STRENGTHS --
+# NOT: bunlar tablo degil <ol>/<ul> listesi -> data-ph uzerinden doldurulur
+function Fill-Ph {
+    param([string]$Ph, [string]$Text)
+    if (-not $Text) { return }
+    $script:phText = $Text
+    $rx = [regex]('(?s)(<(\w+)[^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="' + [regex]::Escape($Ph) + '"[^>]*>)</\2>')
+    if (-not $rx.IsMatch($script:html)) { return }
+    $script:html = $rx.Replace($script:html, {
+        param($m)
+        $script:filled.rows++
+        "$($m.Groups[1].Value)<span class=`"draft`">$(Esc $script:phText)</span></$($m.Groups[2].Value)>"
+    }, 1)
+}
+
+if ($d.tables.findings) {
+    $top = @($d.tables.findings |
+        Sort-Object @{ Expression = { switch ($_.severity) { 'Critical' {0} 'High' {1} 'Medium' {2} default {3} } } } |
+        Select-Object -First 5)
+    for ($i = 0; $i -lt $top.Count; $i++) {
+        $f = $top[$i]
+        Fill-Ph "[Finding $($i + 1)]" "$($f.id) - $($f.finding) [$($f.severity)]"
+    }
+}
+
+# guclu yonler: yuksek uyumlu kritik kontroller
+$strong = @($cfgAll |
+    Where-Object { $_.compliance -ge 98 -and $_.applicable -ge 50 -and $_.subcategory -in 'Antivirus','EDR','Firewall','Bitlocker','SmartScreen' } |
+    Sort-Object -Property @{ Expression = { $_.applicable }; Descending = $true } | Select-Object -First 3)
+for ($i = 0; $i -lt $strong.Count; $i++) {
+    $c = $strong[$i]
+    Fill-Ph "[Strength $($i + 1)]" "$($c.name) - $([math]::Round([double]$c.compliance))% of $($c.applicable) devices"
+}
+
+# ------------------------------------------------- LISANS HAK KONTROLU --
+function Lic-Row {
+    param($L, [string]$Note)
+    if (-not $L) { return @{ draft = $true; v = @('0', '0', '0', '0', 'Not present in the tenant') } }
+    return @{ draft = $true; v = @("$($L.purchased)", "$($L.assigned)", "$($L.assigned)", "$($L.available)", "$Note - $($L.skus)") }
+}
+Fill-Rows -Heading 'License Inventory' -Map @{
+    'Defender for Endpoint Plan 1'   = (Lic-Row $lic.p1 'Plan 1 entitlement comes with these SKUs')
+    'Defender for Endpoint Plan 2'   = (Lic-Row $lic.p2 'Plan 2 entitlement comes with these SKUs')
+    'Defender for Servers'           = @{ draft = $true; v = @('', '', '', '', 'Server plans are licensed in Defender for Cloud and are not visible in subscribedSkus - confirm in the Azure portal') }
+    'Defender Vulnerability Management' = (Lic-Row $lic.tvm 'Standalone add-on')
+    'Microsoft 365 E5'               = (Lic-Row $lic.p2 'E5 family')
+} | Out-Null
+
+$p2n = if ($lic.p2) { $lic.p2.assigned } else { 0 }
+$p1n = if ($lic.p1) { $lic.p1.assigned } else { 0 }
+$yesP2 = if ($p2n -gt 0) { "Yes - $p2n Plan 2 licences" } else { 'No Plan 2 entitlement found' }
+$yesAll = if (($p1n + $p2n) -gt 0) { "Yes - $($p1n + $p2n) licensed users" } else { 'No entitlement found' }
+
+Fill-Rows -Heading 'Capability Entitlement Check' -Map @{
+    'Next-generation protection'      = @{ draft = $true; v = @($yesAll) }
+    'Attack surface reduction'        = @{ draft = $true; v = @($yesAll) }
+    'Device control'                  = @{ draft = $true; v = @($yesAll) }
+    'Manual response actions'         = @{ draft = $true; v = @($yesAll) }
+    'EDR & behavioural blocking'      = @{ draft = $true; v = @($yesP2) }
+    'Automated investigation'         = @{ draft = $true; v = @($yesP2) }
+    'Advanced hunting'                = @{ draft = $true; v = @($yesP2) }
+    'Vulnerability management'        = @{ draft = $true; v = @($yesP2) }
+    'Threat analytics'                = @{ draft = $true; v = @($yesP2) }
+    'Defender Experts'                = @{ draft = $true; v = @('Separate subscription - confirm with the client') }
+    'Streaming API'                   = @{ draft = $true; v = @($yesP2) }
+} | Out-Null
 
 # ------------------------------------------------------ LISANS ENVANTERI -
 if ($d.tables.licenses) {
