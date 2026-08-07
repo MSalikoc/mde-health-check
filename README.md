@@ -1,52 +1,53 @@
 # Microsoft Defender for Endpoint — Health Check
 
-Bir MDE tenant'ından salt-okunur veri çeker, topladığı veriyi best-practice ile karşılaştırır ve düzenlenebilir bir değerlendirme raporu üretir. Rapor İngilizce, araçlar PowerShell 7.
+Collects read-only data from an MDE tenant, compares it against best practice, and produces an editable assessment report. The report is in English; the tooling is PowerShell 7.
 
-Otomatik üretilen her yorum **(REVIEW)** işaretlidir; danışman tek tek okuyup onaylar. İşaret kalmadığında health check tamamlanmış olur.
+Every generated comment is marked **(REVIEW)**. The consultant reads and approves each one individually — when no marks remain, the health check is complete.
 
-| Dosya | İşlevi |
+| File | Purpose |
 |---|---|
-| `New-MdeApp.ps1` | **Ön adım.** Entra app kaydını, izinleri ve admin consent'i oluşturur |
-| `MDE-Collect.ps1` | Tenant'tan veri toplar → `mde-assessment-data.json` |
-| `MDE-Render.ps1` | JSON'u şablona işler → doldurulmuş rapor |
-| `Run-Assessment.ps1` | Toplama + rapor üretimini tek komutta çalıştırır |
-| `Test-Parse.ps1` | Sözdizimi kontrolü (sorun giderirken ilk çalıştırılacak) |
-| `MDE-Health-Assessment-Template.html` | 24 bölümlük boş rapor şablonu |
-| `MDE-Health-Assessment-SAMPLE.html` | Örnek veriyle dolu sürüm (kurgusal Northwind Holding) |
-| `MDE-Health-Assessment-Template.docx` | Aynı raporun Word sürümü |
-| `sample-data.json` | Tenant olmadan render denemek için |
+| `New-MdeApp.ps1` | **Prerequisite step.** Creates the Entra app registration, permissions and admin consent |
+| `MDE-Collect.ps1` | Collects tenant data → `mde-assessment-data.json` |
+| `MDE-Render.ps1` | Merges the JSON into the template → populated report |
+| `Run-Assessment.ps1` | Runs collection and rendering in a single command |
+| `Test-Parse.ps1` | Syntax check (run this first when troubleshooting) |
+| `MDE-Health-Assessment-Template.html` | Empty 24-section report template |
+| `MDE-Health-Assessment-SAMPLE.html` | Version filled with sample data (fictional Northwind Holding) |
+| `MDE-Health-Assessment-Template.docx` | Word version of the same report |
+| `sample-data.json` | For testing the renderer without a tenant |
+| `BASLA-WINDOWS.md` | Short command sequence (Turkish) |
 
 ---
 
-# Adım adım (PowerShell)
+# Step by step (PowerShell)
 
-## Adım 0 · Ön koşullar
+## Step 0 · Prerequisites
 
-**PowerShell 7+ gerekir.** Windows'ta hazır gelen "Windows PowerShell 5.1" (mavi ikon) bu script'leri çalıştıramaz.
+**PowerShell 7+ is required.** The "Windows PowerShell 5.1" that ships with Windows (blue icon) cannot run these scripts.
 
 ```powershell
 winget install --id Microsoft.PowerShell --source winget
 ```
 
-Kurulumdan sonra **yeni bir PowerShell 7 penceresi** (siyah ikon, `pwsh`) açın ve doğrulayın:
+After installation open a **new PowerShell 7 window** (black icon, `pwsh`) and verify:
 
 ```powershell
 $PSVersionTable.PSVersion
 ```
 
-`Major` değeri 7 veya üzeri olmalı.
+`Major` must be 7 or above.
 
-**Tenant'ta gereken roller:**
+**Roles required in the tenant:**
 
-| Rol | Ne için |
+| Role | Needed for |
 |---|---|
-| **Security Reader** | Defender verisi: uyarılar, olaylar, Secure Score, TVM, Advanced Hunting |
-| **Global Reader** | Lisanslar, roller, PIM, Conditional Access, Intune politikaları |
-| **Global Administrator** | Yalnızca Adım 2'deki app kaydı + consent için (bir kez) |
+| **Security Reader** | Defender data: alerts, incidents, Secure Score, TVM, Advanced Hunting |
+| **Global Reader** | Licences, directory roles, PIM, Conditional Access, Intune policies |
+| **Global Administrator** | Only for the app registration and consent in Step 3 (one time) |
 
-> Tenant'ta **Defender RBAC** açıksa, hesabın tüm cihaz gruplarına erişimi olan bir role atanmış olması gerekir. Aksi halde izinler tam olsa bile envanter ve zafiyet sayıları kısmi gelir.
+> If **Defender RBAC** is enabled in the tenant, the account must be assigned to a role with access to all device groups. Otherwise inventory and vulnerability counts come back partial even when the permissions are correct.
 
-## Adım 1 · Dosyaları alın
+## Step 1 · Get the files
 
 ```powershell
 git clone https://github.com/MSalikoc/mde-health-check.git
@@ -56,67 +57,67 @@ git clone https://github.com/MSalikoc/mde-health-check.git
 cd mde-health-check
 ```
 
-İnternetten indirilen `.ps1` dosyaları Windows tarafından bloke edilir (Mark-of-the-Web):
+Windows blocks `.ps1` files downloaded from the internet (Mark-of-the-Web):
 
 ```powershell
 Get-ChildItem *.ps1 | Unblock-File
 ```
 
-Script çalıştırma politikası kapalıysa **yalnızca bu oturum için** açın (kalıcı değişiklik yapmaz):
+If the execution policy is restricted, relax it **for this session only** (no permanent change):
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 ```
 
-## Adım 2 · Sözdizimi kontrolü (30 saniye)
+## Step 2 · Syntax check (30 seconds)
 
-Bir şey çalıştırmadan önce dosyaların sağlam geldiğini doğrulayın:
+Before running anything, confirm the files arrived intact:
 
 ```powershell
 .\Test-Parse.ps1
 ```
 
-Beş dosya için de `OK` görmelisiniz. `HATA` çıkarsa satır ve sütun numarasıyla birlikte gösterir — o çıktıyı paylaşın.
+You should see `OK` for all five scripts. If it reports `HATA`, it prints the line and column — share that output.
 
-## Adım 3 · Entra app kaydı (bir kez)
+## Step 3 · Entra app registration (one time)
 
-Varsayılan ClientId (Azure CLI) yalnızca dizin okumaya yetkilidir; **Defender izinlerine sahip değildir.** Onunla çalıştırırsanız tenant adı ve lisanslar gelir, geri kalan her çağrı `403` döner.
+The default ClientId (Azure CLI) is only authorised for directory reads and **has no Defender permissions**. Running with it returns the tenant name and licences, and `403` for everything else.
 
 ```powershell
 .\New-MdeApp.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6
 ```
 
-Ekranda bir cihaz kodu çıkar → <https://microsoft.com/devicelogin> adresinde **Global Administrator** hesabıyla giriş yapın.
+A device code appears — sign in at <https://microsoft.com/devicelogin> with a **Global Administrator** account.
 
-Script sırasıyla şunları yapar:
+The script then:
 
-1. `MDE Health Check Collector` adıyla app kaydı oluşturur
-2. *Allow public client flows* ayarını açar (device code için şart)
-3. 10 Graph + 6 WindowsDefenderATP delegated iznini ekler (GUID'ler servicePrincipal'dan dinamik çözülür)
-4. Service principal oluşturur ve **admin consent verir**
-5. Client ID'yi `.mde-app.json` dosyasına yazar
+1. Creates an app registration named `MDE Health Check Collector`
+2. Turns on *Allow public client flows* (required for device code)
+3. Adds 10 Microsoft Graph and 6 WindowsDefenderATP delegated permissions (permission GUIDs are resolved dynamically from the service principal)
+4. Creates the service principal and **grants admin consent**
+5. Writes the client ID to `.mde-app.json`
 
-İdempotenttir: tekrar çalıştırırsanız var olan kaydı bulur, eksik izinleri tamamlar.
+It is idempotent: run it again and it finds the existing registration and fills in any missing permissions.
 
-> Consent'in yayılması 1-2 dakika sürebilir. Hemen ardından 403 alırsanız bir kez daha deneyin.
+> Consent can take a minute or two to propagate. If you still get 403 immediately afterwards, try once more.
 
-## Adım 4 · Veriyi toplayın ve raporu üretin
+## Step 4 · Collect the data and produce the report
 
-Tek komut — toplar, raporu üretir, tarayıcıda açar. `-ClientId` yazmanıza gerek yok, `.mde-app.json` otomatik okunur:
+One command — collects, renders and opens the report in the browser. You do not need `-ClientId`; `.mde-app.json` is read automatically:
 
 ```powershell
 .\Run-Assessment.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -Logo microsoft
 ```
 
-Yine bir cihaz kodu çıkar; bu sefer **Security Reader + Global Reader** yetkili hesapla giriş yapın (aynı hesap da olabilir).
+A device code appears again; this time sign in with the account holding **Security Reader + Global Reader** (it can be the same account).
 
-**İlk denemeyi dar kapsamla yapmanız önerilir** — 1-2 dakikada biter, izin sorunlarını hemen gösterir:
+**Start with a narrow scope on the first run** — it finishes in a minute or two and surfaces permission problems immediately:
 
 ```powershell
 .\Run-Assessment.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -GraphOnly -AlertDays 7 -EventDays 7
 ```
 
-### Adımları ayrı çalıştırmak isterseniz
+### Running the steps separately
 
 ```powershell
 .\MDE-Collect.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -RawDumpPath .\raw -Verbose
@@ -126,25 +127,25 @@ Yine bir cihaz kodu çıkar; bu sefer **Security Reader + Global Reader** yetkil
 .\MDE-Render.ps1 -DataFile .\mde-assessment-data.json -Template .\MDE-Health-Assessment-Template.html -ClientName "Contoso A.S." -Logo microsoft
 ```
 
-## Adım 5 · Raporu tamamlayın
+## Step 5 · Finish the report
 
-Klasörde şunlar oluşur:
+The folder will contain:
 
-- `mde-assessment-data.json` — çekilen ham veri (**elle düzenlenebilir**)
-- `raw\` — her API/KQL çağrısının ham çıktısı (sorun giderme)
-- `<Musteri>-MDE-Assessment-<tarih>.html` — rapor
+- `mde-assessment-data.json` — the collected raw data (**editable by hand**)
+- `raw\` — raw output of every API/KQL call (troubleshooting)
+- `<Client>-MDE-Assessment-<date>.html` — the report
 
-Raporu tarayıcıda açın:
+Open the report in a browser:
 
-1. Sağ üstteki sayaç kaç **(REVIEW)** işaretli taslak kaldığını gösterir
-2. Her taslağı okuyun; doğruysa **(REVIEW) rozetine tıklayın** (veya metnin herhangi bir yerine `Alt+tık`) — işaret gider, metin kalır
-3. Yanlışsa metne tıklayıp düzeltin, sonra rozeti kaldırın
-4. Gri italik yer tutucular otomatik doldurulamayan alanlardır — elle yazın
-5. Sayaç sıfırlandığında **Ctrl+P → PDF olarak kaydet** (kenar boşluğu: yok, arka plan grafikleri: açık)
+1. The counter in the toolbar shows how many **(REVIEW)** drafts remain
+2. Read each draft; if it is correct, **click the (REVIEW) tag** (or `Alt+click` anywhere in the text) — the mark disappears, the text stays
+3. If it is wrong, click the text, correct it, then clear the tag
+4. Grey italic placeholders are fields that could not be filled automatically — write them yourself
+5. When the counter reaches zero: **Ctrl+P → Save as PDF** (margins: none, background graphics: on)
 
-> Toplu "hepsini kaldır" butonu bilerek yok. Her taslak tek tek okunmalı.
+> There is deliberately no "clear all" button. Every draft is meant to be read individually.
 
-JSON'u elle düzeltip raporu yeniden üretmek için:
+To correct the JSON by hand and re-render the report:
 
 ```powershell
 .\Run-Assessment.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -SkipCollect
@@ -152,99 +153,99 @@ JSON'u elle düzeltip raporu yeniden üretmek için:
 
 ---
 
-# Parametreler
+# Parameters
 
 ### Run-Assessment.ps1
 
-| Parametre | Açıklama |
+| Parameter | Description |
 |---|---|
-| `-TenantId` | Tenant GUID'i veya `xxx.onmicrosoft.com` (zorunlu) |
-| `-ClientId` | App kaydı ID'si (boşsa `.mde-app.json` okunur) |
-| `-ClientName "Contoso A.S."` | Kapaktaki müşteri adı (boşsa tenant adı) |
-| `-Logo microsoft` | Kapak logosu: `template` / `microsoft` / `none` |
-| `-CreateApp` | App kaydını da bu çalıştırmada oluştur (Adım 3 + 4 birlikte) |
-| `-GraphOnly` | `api.securitycenter.microsoft.com` çağrılarını atla |
-| `-AlertDays 90` / `-EventDays 30` | Telemetri pencereleri |
-| `-SkipCollect` | Toplamayı atla, mevcut JSON'dan raporu yeniden üret |
-| `-Template <yol>` | Farklı bir şablon dosyası kullan |
+| `-TenantId` | Tenant GUID or `xxx.onmicrosoft.com` (required) |
+| `-ClientId` | App registration ID (read from `.mde-app.json` when omitted) |
+| `-ClientName "Contoso A.S."` | Client name on the cover (tenant name when omitted) |
+| `-Logo microsoft` | Cover logo: `template` / `microsoft` / `none` |
+| `-CreateApp` | Create the app registration in the same run (Step 3 + 4 together) |
+| `-GraphOnly` | Skip `api.securitycenter.microsoft.com` calls |
+| `-AlertDays 90` / `-EventDays 30` | Telemetry windows |
+| `-SkipCollect` | Skip collection and re-render from the existing JSON |
+| `-Template <path>` | Use a different template file |
 
-### MDE-Collect.ps1 (ek)
+### MDE-Collect.ps1 (additional)
 
-| Parametre | Açıklama |
+| Parameter | Description |
 |---|---|
-| `-RawDumpPath .\raw` | Ham API/KQL çıktılarını diske yaz |
-| `-OutFile` | JSON çıktı yolu |
-| `-Verbose` | Ayrıntılı ilerleme |
+| `-RawDumpPath .\raw` | Write raw API/KQL output to disk |
+| `-OutFile` | JSON output path |
+| `-Verbose` | Detailed progress |
 
-### MDE-Render.ps1 (ek)
+### MDE-Render.ps1 (additional)
 
-| Parametre | Açıklama |
+| Parameter | Description |
 |---|---|
-| `-HideDataTables` | Grafik veri tablolarını gizli başlat (teslim için daha temiz) |
-| `-OutFile` | Rapor dosyası adı |
+| `-HideDataTables` | Start with chart data tables hidden (cleaner for delivery) |
+| `-OutFile` | Report file name |
 
 ---
 
-# İzinler
+# Permissions
 
-Hepsi **delegated** ve **read-only**. `New-MdeApp.ps1` bunları otomatik ekler ve consent verir.
+All **delegated** and **read-only**. `New-MdeApp.ps1` adds them and grants consent automatically.
 
 **Microsoft Graph:** `ThreatHunting.Read.All`, `SecurityEvents.Read.All`, `SecurityAlert.Read.All`, `SecurityIncident.Read.All`, `CustomDetection.Read.All`, `DeviceManagementConfiguration.Read.All`, `Directory.Read.All`, `Organization.Read.All`, `Policy.Read.All`, `RoleManagement.Read.Directory`
 
 **WindowsDefenderATP:** `Vulnerability.Read`, `SecurityRecommendation.Read`, `Score.Read`, `Ti.Read`, `Machine.Read`, `AdvancedQuery.Read`
 
-Script hiçbir yazma çağrısı yapmaz; hata alan her bölüm atlanır ve raporun "Automated Collection Notes" sayfasına uyarı olarak yazılır.
+The scripts make no write calls. Any section that fails is skipped and recorded as a warning on the report's "Automated Collection Notes" page.
 
 ---
 
-# Ne otomatik doluyor
+# What is filled automatically
 
-| Rapor alanı | Kaynak |
+| Report area | Source |
 |---|---|
-| Cihaz envanteri, onboarding oranı, platform kırılımı | AH `DeviceInfo` |
-| Sensör sağlığı (active / inactive / impaired) | AH `DeviceInfo.SensorHealthState` |
-| AV / ASR / baseline yapılandırma uyumu | AH `DeviceTvmSecureConfigurationAssessment` |
-| ASR kural modları | Intune `configurationPolicies` + AH `DeviceEvents` |
-| Zafiyet dağılımı, top yazılım, yazılım envanteri | AH `DeviceTvmSoftwareVulnerabilities` |
-| Exposure score, güvenlik önerileri, indicator'lar | MDE API |
-| Secure Score + kategori kırılımı | Graph `security/secureScores` |
-| Uyarı/olay hacmi, severity, taktik, MTTD/MTTR | Graph `security/alerts_v2`, `incidents` |
-| Özel tespit kuralları | Graph `security/rules/detectionRules` |
-| Lisans envanteri | Graph `subscribedSkus` |
-| Intune politikaları, AV exclusion'ları | Graph `deviceManagement/configurationPolicies` |
-| Ayrıcalıklı roller, PIM, Conditional Access | Graph `directoryRoles`, `conditionalAccess/policies` |
-| **Taslak bulgular** | Eşik kuralları (kapsam, tamper, ASR, CVE, exposure, CA, GA sayısı) |
-| **Anlatım metinleri** | Toplanan veri + best practice (39 alan) |
-| **Kontrol yorumları** | Best practice kütüphanesi (178 anahtar, ~183 satır) |
+| Device inventory, onboarding rate, platform breakdown | AH `DeviceInfo` |
+| Sensor health (active / inactive / impaired) | AH `DeviceInfo.SensorHealthState` |
+| AV / ASR / baseline configuration compliance | AH `DeviceTvmSecureConfigurationAssessment` |
+| ASR rule modes | Intune `configurationPolicies` + AH `DeviceEvents` |
+| Vulnerability breakdown, top software, software inventory | AH `DeviceTvmSoftwareVulnerabilities` |
+| Exposure score, security recommendations, indicators | MDE API |
+| Secure Score and category breakdown | Graph `security/secureScores` |
+| Alert/incident volume, severity, tactic, MTTD/MTTR | Graph `security/alerts_v2`, `incidents` |
+| Custom detection rules | Graph `security/rules/detectionRules` |
+| Licence inventory | Graph `subscribedSkus` |
+| Intune policies, antivirus exclusions | Graph `deviceManagement/configurationPolicies` |
+| Privileged roles, PIM, Conditional Access | Graph `directoryRoles`, `conditionalAccess/policies` |
+| **Draft findings** | Threshold rules (coverage, tamper, ASR, CVEs, exposure, CA, GA count) |
+| **Narrative text** | Collected data + best practice (39 fields) |
+| **Control commentary** | Best-practice library (178 keys, ~183 rows) |
 
-# Ne elle kalır
+# What stays manual
 
-Yönetici özetinin doğrulanması, risk ifadesinin müşteriye uyarlanması, bulgu severity kararı, effort/owner/tarih, olgunluk puanları, öncelik matrisi, revizyon geçmişi ve iletişim bilgileri.
+Verifying the executive summary, adapting the risk statement to the client, deciding finding severity, effort/owner/dates, maturity scoring, the priority matrix, revision history and contact details.
 
-Teknik olarak imkânsız olanlar: 6 aylık trendler (Advanced Hunting 30 gün tutar), onboarding yöntemi (`DeviceInfo`'da alan yok), AIR otomasyon oranları (API'de yok), Threat Analytics kullanımı (API yok).
+Technically impossible: six-month trends (Advanced Hunting retains 30 days), onboarding method (no such field in `DeviceInfo`), AIR automation rates (no API), Threat Analytics usage (no API).
 
 ---
 
-# Sorun giderme
+# Troubleshooting
 
-| Belirti | Sebep / çözüm |
+| Symptom | Cause / fix |
 |---|---|
-| `#Requires -Version 7.0` veya sözdizimi hataları | Windows PowerShell 5.1'de çalıştırıyorsunuz → `pwsh` ile açın |
+| `#Requires -Version 7.0` or syntax errors | You are running Windows PowerShell 5.1 → open `pwsh` |
 | `... is not digitally signed` | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force` |
-| `zsh/pwsh: no such file or directory: <tenant>` | Komuttaki `< >` işaretlerini silin, yer tutucuydu |
-| `AADSTS65001` / `invalid_client` | App kaydı yok veya consent verilmemiş → Adım 3 |
-| Çağrıların çoğu `403` | Token'da Defender izinleri yok → Adım 3. Script eksik izinleri baştan listeler |
-| `403` yalnızca securitycenter çağrılarında | `-GraphOnly` ile devam edin; exposure score elle girilir |
-| Advanced Hunting boş dönüyor | `ThreatHunting.Read.All` consent'i yok ya da Defender RBAC kısıtlıyor |
-| Uyarı çekimi çok uzun | `-AlertDays 30` yapın |
-| ASR kuralları "not configured" görünüyor | Telemetride olay yoksa Intune'dan türetilir; GPO ile yönetilen kurallar görünmez |
-| Türkçe karakterler bozuk | Windows Terminal kullanın (conhost yerine) |
-| Rapor eski görünüyor / değişiklikler yansımıyor | Tarayıcı kayıtlı kopyayı yüklüyor olabilir → `Ctrl+Shift+R` |
+| `no such file or directory: <tenant>` | Remove the `< >` characters from the command — they were placeholders |
+| `AADSTS65001` / `invalid_client` | No app registration or consent not granted → Step 3 |
+| Most calls return `403` | The token has no Defender permissions → Step 3. The script lists the missing permissions up front |
+| `403` only on securitycenter calls | Continue with `-GraphOnly`; enter the exposure score manually |
+| Advanced Hunting returns nothing | `ThreatHunting.Read.All` consent missing, or Defender RBAC is restricting the account |
+| Alert collection takes too long | Use `-AlertDays 30` |
+| ASR rules show as "not configured" | Derived from Intune when telemetry has no events; rules managed through Group Policy are invisible |
+| Turkish characters look broken | Use Windows Terminal instead of conhost |
+| Report looks stale / changes not showing | The browser may be loading its saved copy → `Ctrl+Shift+R` |
 
-# Bilinen sınırlar
+# Known limits
 
-- **ASR modları** Intune politikalarından türetilir; GPO ile yönetilen kurallar görünmez.
-- **Exclusion listesi** yalnızca Intune politikalarından çıkarılır; GPO/yerel exclusion'lar için live response veya registry sorgusu gerekir.
-- **Advanced Hunting** 30 günlük veri tutar; daha uzun trendler Sentinel'den çekilmelidir.
-- **Best practice yorumları** satır bazlı genel doğrulardır ("bu ayar neden önemli, hedef ne olmalı"); tenant değerine göre yazılan yorumlar yalnızca veri toplanan alanlarda vardır.
-- Toplanan veri ve üretilen raporlar `.gitignore` ile dışarıda tutulur — müşteri verisi yanlışlıkla commit edilmez.
+- **ASR modes** are derived from Intune policies; rules managed through Group Policy are not visible.
+- **The exclusion list** is extracted from Intune policies only; Group Policy and local exclusions require live response or a registry query.
+- **Advanced Hunting** retains 30 days of data; longer trends must come from Sentinel.
+- **Best-practice commentary** is row-level general guidance ("why this control matters, what the target is"); commentary written against the tenant's own values exists only where data is collected.
+- Collected data and generated reports are excluded through `.gitignore`, so client data is never committed by accident.
