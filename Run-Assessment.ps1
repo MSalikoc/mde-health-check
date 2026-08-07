@@ -11,7 +11,7 @@
     .\Run-Assessment.ps1 -TenantId contoso.onmicrosoft.com
 
 .EXAMPLE
-    .\Run-Assessment.ps1 -TenantId <guid> -ClientName "Contoso A.S." -Logo microsoft -GraphOnly
+    .\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -ClientName "Contoso A.S." -Logo microsoft -GraphOnly
 #>
 [CmdletBinding()]
 param(

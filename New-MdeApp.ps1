@@ -19,7 +19,7 @@
     .\New-MdeApp.ps1 -TenantId contoso.onmicrosoft.com
 
 .EXAMPLE
-    .\New-MdeApp.ps1 -TenantId <guid> -Name "MDE Assessment - CyberWise"
+    .\New-MdeApp.ps1 -TenantId YOUR-TENANT-ID -Name "MDE Health Check - Contoso"
 #>
 [CmdletBinding()]
 param(

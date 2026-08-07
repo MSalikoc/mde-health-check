@@ -15,7 +15,7 @@
 
 .EXAMPLE
     # Kendi app kaydınızla (önerilen — pre-authorization sorunlarını ortadan kaldırır)
-    ./MDE-Collect.ps1 -TenantId <guid> -ClientId <public-client-app-id> -Verbose
+    ./MDE-Collect.ps1 -TenantId YOUR-TENANT-ID -ClientId <public-client-app-id> -Verbose
 #>
 [CmdletBinding()]
 param(

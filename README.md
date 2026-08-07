@@ -37,6 +37,10 @@ $PSVersionTable.PSVersion
 
 `Major` must be 7 or above.
 
+> In every command below, replace `YOUR-TENANT-ID` with your own tenant GUID or
+> `contoso.onmicrosoft.com` domain. Do not wrap it in `< >` — in a shell those are
+> redirection operators and the command will fail before it starts.
+
 **Roles required in the tenant:**
 
 | Role | Needed for |
@@ -84,7 +88,7 @@ You should see `OK` for all five scripts. If it reports `HATA`, it prints the li
 The default ClientId (Azure CLI) is only authorised for directory reads and **has no Defender permissions**. Running with it returns the tenant name and licences, and `403` for everything else.
 
 ```powershell
-.\New-MdeApp.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6
+.\New-MdeApp.ps1 -TenantId YOUR-TENANT-ID
 ```
 
 A device code appears — sign in at <https://microsoft.com/devicelogin> with a **Global Administrator** account.
@@ -106,7 +110,7 @@ It is idempotent: run it again and it finds the existing registration and fills 
 One command — collects, renders and opens the report in the browser. You do not need `-ClientId`; `.mde-app.json` is read automatically:
 
 ```powershell
-.\Run-Assessment.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -Logo microsoft
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -Logo microsoft
 ```
 
 A device code appears again; this time sign in with the account holding **Security Reader + Global Reader** (it can be the same account).
@@ -114,13 +118,13 @@ A device code appears again; this time sign in with the account holding **Securi
 **Start with a narrow scope on the first run** — it finishes in a minute or two and surfaces permission problems immediately:
 
 ```powershell
-.\Run-Assessment.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -GraphOnly -AlertDays 7 -EventDays 7
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -GraphOnly -AlertDays 7 -EventDays 7
 ```
 
 ### Running the steps separately
 
 ```powershell
-.\MDE-Collect.ps1 -TenantId ********************* -RawDumpPath .\raw -Verbose
+.\MDE-Collect.ps1 -TenantId YOUR-TENANT-ID -RawDumpPath .\raw -Verbose
 ```
 
 ```powershell
@@ -148,7 +152,7 @@ Open the report in a browser:
 To correct the JSON by hand and re-render the report:
 
 ```powershell
-.\Run-Assessment.ps1 -TenantId af80ebe6-b601-49c4-89b9-381499b97ba6 -SkipCollect
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -SkipCollect
 ```
 
 ---

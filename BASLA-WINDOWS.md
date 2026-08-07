@@ -24,20 +24,20 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 ```powershell
 # 4) Entra app kaydi (bir kez, Global Administrator ile giris)
-.\New-MdeApp.ps1 -TenantId <tenant-guid>
+.\New-MdeApp.ps1 -TenantId YOUR-TENANT-ID
 ```
 
 ```powershell
 # 5) Toplama + rapor (Security Reader + Global Reader ile giris)
-.\Run-Assessment.ps1 -TenantId <tenant-guid> -Logo microsoft
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -Logo microsoft
 ```
 
 ```powershell
 # Ilk deneme icin dar kapsam (1-2 dakika)
-.\Run-Assessment.ps1 -TenantId <tenant-guid> -GraphOnly -AlertDays 7 -EventDays 7
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -GraphOnly -AlertDays 7 -EventDays 7
 ```
 
-> `<tenant-guid>` yazarken **köşeli parantezleri silin**. PowerShell'de `<` `>` yönlendirme operatörüdür ve hata verir.
+> `YOUR-TENANT-ID` yerine kendi tenant GUID'inizi veya `contoso.onmicrosoft.com` alan adınızı yazın. Çevresine `< >` koymayın — kabukta bunlar yönlendirme operatörüdür ve komut çalışmadan hata verir.
 
 ## Sonra
 
@@ -51,5 +51,5 @@ Rapor tarayıcıda açılır. Sağ üstteki sayaç kaç **(REVIEW)** işaretli t
 JSON'u elle düzeltip raporu yeniden üretmek:
 
 ```powershell
-.\Run-Assessment.ps1 -TenantId <tenant-guid> -SkipCollect
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -SkipCollect
 ```
