@@ -110,7 +110,7 @@ It is idempotent: run it again and it finds the existing registration and fills 
 One command — collects, renders and opens the report in the browser. You do not need `-ClientId`; `.mde-app.json` is read automatically:
 
 ```powershell
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -Logo microsoft
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID
 ```
 
 A device code appears again; this time sign in with the account holding **Security Reader + Global Reader** (it can be the same account).
@@ -128,7 +128,7 @@ A device code appears again; this time sign in with the account holding **Securi
 ```
 
 ```powershell
-.\MDE-Render.ps1 -DataFile .\mde-assessment-data.json -Template .\MDE-Health-Assessment-Template.html -ClientName "Contoso A.S." -Logo microsoft
+.\MDE-Render.ps1 -DataFile .\mde-assessment-data.json -Template .\MDE-Health-Assessment-Template.html -ClientName "Contoso A.S."
 ```
 
 ## Step 5 · Finish the report
@@ -166,7 +166,7 @@ To correct the JSON by hand and re-render the report:
 | `-TenantId` | Tenant GUID or `xxx.onmicrosoft.com` (required) |
 | `-ClientId` | App registration ID (read from `.mde-app.json` when omitted) |
 | `-ClientName "Contoso A.S."` | Client name on the cover (tenant name when omitted) |
-| `-Logo microsoft` | Cover logo: `template` / `microsoft` / `none` |
+| `-Logo` | Cover logo. Default `template` = keep the logo in the template file, which already ships with the Microsoft logo. Use `microsoft` only to force it onto a template carrying a different logo, or `none` to remove it |
 | `-CreateApp` | Create the app registration in the same run (Step 3 + 4 together) |
 | `-GraphOnly` | Skip `api.securitycenter.microsoft.com` calls |
 | `-AlertDays 90` / `-EventDays 30` | Telemetry windows |

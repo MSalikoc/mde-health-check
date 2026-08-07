@@ -29,7 +29,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 ```powershell
 # 5) Toplama + rapor (Security Reader + Global Reader ile giris)
-.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID -Logo microsoft
+.\Run-Assessment.ps1 -TenantId YOUR-TENANT-ID
 ```
 
 ```powershell
