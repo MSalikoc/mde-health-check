@@ -159,6 +159,43 @@ $lic = @{
     tvm = Sku-Sum 'TVM_Premium'
 }
 
+# --------------------------------------- OLGUNLUK: MEVCUT vs HEDEF (1-5) --
+if ($dom) {
+    $five = @{}
+    foreach ($k in $dom.Keys) { if ($null -ne $dom[$k]) { $five[$k] = [math]::Max(1, [math]::Round($dom[$k] / 20)) } }
+    if ($five.Count) {
+        $labels = @('Deployment','Protection','ASR','TVM','EDR','Hunting','Integration','Governance')
+        $src = @('Deployment & Onboarding','Next-Generation Protection','Attack Surface Reduction',
+                 'Vulnerability Management','EDR & Automation','', '', '')
+        $series = @()
+        for ($i = 0; $i -lt $labels.Count; $i++) {
+            $cur = if ($src[$i] -and $five.ContainsKey($src[$i])) { $five[$src[$i]] } else { '' }
+            $tgt = if ($cur -ne '') { [math]::Min(5, [int]$cur + 1) } else { '' }
+            $series += , @($labels[$i], $cur, $tgt)
+        }
+        Set-Chart 'Maturity: current vs. target (1–5)' $series
+    }
+}
+
+# ------------------------------------------ WEB KORUMA KATEGORILERI -------
+if ($d.tables.webProtection) {
+    $lbl = @{
+        'SmartScreenUrlWarning'                = 'Malicious or suspicious URL (SmartScreen)'
+        'SmartScreenAppWarning'                = 'Untrusted application (SmartScreen)'
+        'ExploitGuardNetworkProtectionBlocked' = 'Blocked by network protection'
+        'ExploitGuardNetworkProtectionAudited' = 'Audited by network protection'
+        'NetworkProtectionUserBypassEvent'     = 'User bypassed the block'
+    }
+    $series = @($d.tables.webProtection | Sort-Object -Property @{ Expression = { [int]$_.events }; Descending = $true } |
+        ForEach-Object {
+            $n = if ($lbl[$_.action]) { $lbl[$_.action] } else { $_.action }
+            Write-Output -NoEnumerate @($n, [int]$_.events)
+        })
+    if ($series.Count) { Set-Chart 'Top blocked web categories (requests)' $series }
+}
+
+
+
 $rxChart = [regex]'(?s)<div class="chart"[^>]*>.*?</table>\s*(?:<div class="datahint">.*?</div>\s*)?</div>'
 $html = $rxChart.Replace($html, {
     param($m)
@@ -535,6 +572,83 @@ if ($d.tables.agentVersions) {
     }
 }
 
+
+
+# ------------------------------------------------ EK B: KULLANILAN KQL ----
+if ($d.tables.queries) {
+    $script:qRows = @($d.tables.queries)
+    $script:qIdx = 0
+    $rxQ = [regex]'(?s)(<h3[^>]*>Advanced Hunting Queries Used</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
+    if ($rxQ.IsMatch($script:html)) {
+        $script:html = $rxQ.Replace($script:html, {
+            param($m)
+            $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
+                param($rm)
+                if ($script:qIdx -ge $script:qRows.Count) { return $rm.Value }
+                $q = $script:qRows[$script:qIdx]; $script:qIdx++
+                $script:filled.rows++
+                "<tr><td>$(Esc $q.purpose)</td><td><code style=`"font-size:8pt`">$(Esc $q.query)</code></td></tr>"
+            })
+            "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
+        }, 1)
+    }
+}
+
+# ------------------------------------------- UYUMLULUK ESLEMESI DURUMU ----
+# Her kontrol alanini olctugumuz metrige bagla; olcemedigimizi bos birak.
+function Comp-St { param($Pct) if ($null -eq $Pct) { $null } elseif ($Pct -ge 90) { 'pass' } elseif ($Pct -ge 60) { 'partial' } else { 'fail' } }
+$avPct   = Sub-Avg 'Antivirus'
+$cfgPct  = if ($cfgAll.Count) { [math]::Round(($cfgAll | Measure-Object compliance -Average).Average) } else { $null }
+$onbPct  = Kpi-Num 'Onboarding Rate'
+$shPct   = Kpi-Num 'Sensor health'
+$blPct   = Scid-Pct 'scid-2090'
+$npPct   = Scid-Pct 'scid-96'
+$usbPct  = Scid-Pct 'scid-2511'
+$totA    = Kpi-Num 'Total alerts (90d)'; $resA = Kpi-Num 'Resolved'
+$irPct   = if ($totA -gt 0) { [math]::Round(100 * $resA / $totA) } else { $null }
+
+$compMap = @{
+    '^Malware protection'          = @{ p = $avPct;  e = "Antivirus configuration compliance $avPct%" }
+    '^Endpoint hardening'          = @{ p = $cfgPct; e = "Security configuration compliance $cfgPct% across $($cfgAll.Count) controls" }
+    '^Vulnerability management'    = @{ p = (Kpi-Num 'Secure score for devices'); e = "Secure Score $($d.kpi.'Secure score for devices')" }
+    '^Asset inventory'             = @{ p = $onbPct; e = "$($d.kpi.'Onboarded') of $($d.kpi.'Total Endpoints') devices reporting" }
+    '^Logging &'                   = @{ p = $shPct;  e = "Sensor health $shPct%" }
+    '^Data protection on endpoints'= @{ p = $blPct;  e = "BitLocker encryption $blPct%" }
+    '^Incident response'           = @{ p = $irPct;  e = "$resA of $totA alerts resolved" }
+    '^Removable media control'     = @{ p = $usbPct; e = "USB attack surface rule $usbPct%" }
+    '^Network protection / web'    = @{ p = $npPct;  e = "Network protection $npPct%" }
+}
+$script:compMap = $compMap
+$script:html = [regex]::Replace($script:html, '(?s)<tr><td>([A-Z][^<]{4,40})</td>(?:(?!</tr>).)*</tr>', {
+    param($rm)
+    $row = $rm.Value
+    if ($row -notmatch '<td class="sel"></td>') { return $row }
+    if ($row -notmatch 'A\.\d|ID\.|PR\.|DE\.|RS ') { return $row }   # yalnizca uyumluluk tablosu
+    $label = [regex]::Match($row, '<tr><td>([^<]+)</td>').Groups[1].Value
+    $hit = $null
+    foreach ($k in $script:compMap.Keys) { if ($label -match $k) { $hit = $script:compMap[$k]; break } }
+    if (-not $hit -or $null -eq $hit.p) { return $row }
+    $st = Comp-St $hit.p
+    $row = $row -replace '<td class="sel"></td>', ('<td class="sel">' + (New-Select 'st' $ST_OPTS $st) + '</td>')
+    $row = [regex]::Replace($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>', {
+        param($cm) "<td$($cm.Groups[1].Value)><span class=`"draft`">$(Esc $hit.e)</span></td>"
+    }, 1)
+    $script:filled.rows++
+    return $row
+})
+
+# ------------------------------------------------- ONCELIK MATRISI --------
+$pmF = @($d.tables.findings)
+if ($pmF.Count) {
+    # effort alani toplayicida bos gelebilir: o durumda Critical = hemen yapilacak
+    $hiLow  = @($pmF | Where-Object { $_.effort -eq 'Low' -or (-not $_.effort -and $_.severity -eq 'Critical') })
+    $hiMed  = @($pmF | Where-Object { $_.severity -in 'Critical','High' -and $_.id -notin (@($pmF | Where-Object { $_.effort -eq 'Low' -or (-not $_.effort -and $_.severity -eq 'Critical') }) | ForEach-Object { $_.id }) })
+    $medAll = @($pmF | Where-Object { $_.severity -eq 'Medium' })
+    $ids = { param($set) if ($set.Count) { ($set | ForEach-Object { $_.id }) -join ', ' } else { '' } }
+    Fill-Ph '[do first]' (& $ids $hiLow)
+    Fill-Ph '[plan]'     (& $ids $hiMed)
+    Fill-Ph '[project]'  (& $ids $medAll)
+}
 
 # ------------------------------------------------- LISANS HAK KONTROLU --
 function Lic-Row {
