@@ -455,6 +455,86 @@ for ($i = 0; $i -lt $strong.Count; $i++) {
     Fill-Ph "[Strength $($i + 1)]" "$($c.name) - $([math]::Round([double]$c.compliance))% of $($c.applicable) devices"
 }
 
+
+# ------------------------------------------------ ONBOARDING GAP ANALYSIS -
+# Kapsam disi kalan platformlar cihaz envanterinden dogrudan cikarilabiliyor
+if ($d.tables.deviceInventory) {
+    $gaps = @($d.tables.deviceInventory | Where-Object { [int]$_.gap -gt 0 } |
+              Sort-Object -Property @{ Expression = { [int]$_.gap }; Descending = $true } | Select-Object -First 4)
+    $rootCause = @{
+        'Windows Server 2012 R2' = 'Legacy operating system - requires the modern unified agent'
+        'WindowsXp'              = 'Out-of-support operating system - cannot be onboarded'
+        'Windows7'               = 'Out-of-support operating system - cannot be onboarded'
+        'Windows2003'            = 'Out-of-support operating system - cannot be onboarded'
+        'Linux servers'          = 'Onboarding package not deployed to the Linux estate'
+        'Android'                = 'Mobile onboarding through Intune not configured'
+        'iOS / iPadOS'           = 'Mobile onboarding through Intune not configured'
+    }
+    $i = 0
+    $mapG = @{}
+    foreach ($g in $gaps) {
+        $i++
+        $name = "$($g.platform)"
+        if (-not $name) { $name = 'Unidentified platform' }
+        $cause = $rootCause[$name]
+        if (-not $cause) { $cause = 'Discovered by device inventory but no sensor deployed - confirm the population with the endpoint team' }
+        $ph = @('[e.g. remote branch laptops]', '[e.g. legacy servers]', '[e.g. other AD domain]', '[…]')[$i - 1]
+        if ($ph) {
+            Fill-Ph $ph "$name ($($g.discovered) discovered, $($g.onboarded) onboarded)"
+        }
+        $mapG["^$([regex]::Escape($name))"] = @{ draft = $true; v = @("$($g.gap)", $cause, 'Assign an owner and a target date') }
+    }
+    # satir etiketleri yer tutucu oldugu icin sirayla doldur
+    $script:gapRows = @($gaps)
+    $script:gapIdx = 0
+    $rxGap = [regex]'(?s)(<h3[^>]*>Onboarding Gap Analysis</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
+    if ($rxGap.IsMatch($script:html)) {
+        $script:html = $rxGap.Replace($script:html, {
+            param($m)
+            $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
+                param($rm)
+                if ($script:gapIdx -ge $script:gapRows.Count) { return $rm.Value }
+                $g = $script:gapRows[$script:gapIdx]; $script:gapIdx++
+                $name = "$($g.platform)"; if (-not $name) { $name = 'Unidentified platform' }
+                $cause = $rootCause[$name]
+                if (-not $cause) { $cause = 'Discovered by device inventory but no sensor deployed - confirm this population with the endpoint team' }
+                $script:filled.rows++
+                "<tr><td class=`"f`" contenteditable data-ph=`"––`"><span class=`"draft`">$(Esc $name)</span></td>" +
+                "<td class=`"num f`" contenteditable data-ph=`"––`">$($g.gap)</td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`"><span class=`"draft`">$(Esc $cause)</span></td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`"></td></tr>"
+            })
+            "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
+        }, 1)
+    }
+}
+
+# ----------------------------------------------- AJAN / SURUM GUNCELLIGI --
+if ($d.tables.agentVersions) {
+    $script:verRows = @($d.tables.agentVersions)
+    $script:verIdx = 0
+    $rxVer = [regex]'(?s)(<h3[^>]*>Agent &amp; Platform Version Currency</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
+    if ($rxVer.IsMatch($script:html)) {
+        $script:html = $rxVer.Replace($script:html, {
+            param($m)
+            $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
+                param($rm)
+                if ($script:verIdx -ge $script:verRows.Count) { return $rm.Value }
+                $v = $script:verRows[$script:verIdx]; $script:verIdx++
+                $st = if ([int]$v.behind -eq 0) { 'pass' } elseif ([int]$v.behind -lt 20) { 'partial' } else { 'fail' }
+                $script:filled.rows++
+                "<tr><td>$(Esc $v.component)</td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`">$(Esc $v.current)</td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`">$(Esc $v.latest)</td>" +
+                "<td class=`"num f`" contenteditable data-ph=`"––`">$($v.behind)</td>" +
+                "<td class=`"sel`">$(New-Select 'st' $ST_OPTS $st)</td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`"></td></tr>"
+            })
+            "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
+        }, 1)
+    }
+}
+
 # ------------------------------------------------- LISANS HAK KONTROLU --
 function Lic-Row {
     param($L, [string]$Note)
