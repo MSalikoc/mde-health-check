@@ -774,6 +774,151 @@ $bp = [ordered]@{
     'Security awareness'                 = 'Endpoint findings that trace to user behaviour belong in the awareness programme, not only in technical remediation.'
 }
 
+
+# ============================================================================
+#  GUVENLIK YAPILANDIRMA ESLEMESI
+#  secureConfiguration (131 satir gercek veri) rapordaki kontrol tablolarina
+#  islenir: Observed = "%X of N devices", Status = esige gore rozet.
+#  Eslesme scid ile yapilir - isim benzerligi yanlis satiri doldurabilir.
+# ============================================================================
+$cfgRows = @($d.tables.secureConfiguration)
+$cfgById = @{}
+foreach ($c in $cfgRows) { $cfgById[$c.id] = $c }
+
+function Cfg-Cell {
+    param([string]$Scid)
+    $c = $cfgById[$Scid]
+    if (-not $c) { return $null }
+    $pct = [math]::Round([double]$c.compliance)
+    $st = if ($pct -ge 95) { 'pass' } elseif ($pct -ge 60) { 'partial' } else { 'fail' }
+    return [pscustomobject]@{
+        text = "$pct% of $($c.applicable) devices"
+        pct = $pct
+        status = $st
+        name = $c.name
+    }
+}
+
+# satir etiketi (regex) -> scid
+$CTRL_SCID = [ordered]@{
+    '^Defender AV operating mode'          = 'scid-2010'
+    '^Real-time protection'                = 'scid-2012'
+    '^Behaviour monitoring'                = 'scid-91'
+    '^Cloud-delivered protection'          = 'scid-2016'
+    '^PUA protection'                      = 'scid-2013'
+    '^Tamper protection'                   = 'scid-2003'
+    '^EDR in block mode'                   = 'scid-2004'
+    '^Scan removable drives'               = 'scid-89'
+    '^Signature update interval'           = 'scid-2011'
+    '^Archive / email scanning'            = 'scid-90'
+    'unwanted app removal'                 = 'scid-2013'
+    '^Network protection$'                 = 'scid-96'
+    'SmartScreen'                          = 'scid-2061'
+    '^Controlled folder access'            = 'scid-2021'
+    'BitLocker / disk encryption'          = 'scid-2090'
+    'Credential Guard / LSA protection'    = 'scid-2080'
+    '^Defender Firewall enabled'           = 'scid-2070'
+    'Rule merging from local admins'       = 'scid-51'
+    'EDR sensor active on all onboarded'   = 'scid-2000'
+    'Investigation package collection'     = 'scid-2001'
+}
+
+# ASR: sablon satiri -> scid + Intune kural anahtari + telemetri kural adi
+$ASR_MAP = @(
+    @{ label = 'Block abuse of exploited vulnerable signed drivers'; scid='scid-2515'; rule='blockabuseofexploitedvulnerablesigneddrivers'; ev='' }
+    @{ label = 'Block Adobe Reader from creating child processes'; scid='scid-2513'; rule='blockadobereaderfromcreatingchildprocesses'; ev='AdobeReaderChildProcess' }
+    @{ label = 'Block all Office applications from creating child processes'; scid='scid-2501'; rule='blockallofficeapplicationsfromcreatingchildprocesses'; ev='OfficeChildProcess' }
+    @{ label = 'Block credential stealing from LSASS'; scid='scid-2509'; rule='blockcredentialstealingfromwindowslocalsecurityauthoritysubsystem'; ev='LsassCredentialTheft' }
+    @{ label = 'Block executable content from email client and webmail'; scid='scid-2500'; rule='blockexecutablecontentfromemailclientandwebmail'; ev='ExecutableEmailContent' }
+    @{ label = 'Block executable files unless prevalence'; scid='scid-2507'; rule='blockexecutablefilesrunningunlesstheymeetprevalenceagetrustedlistcriterion'; ev='' }
+    @{ label = 'Block execution of potentially obfuscated scripts'; scid='scid-2505'; rule='blockexecutionofpotentiallyobfuscatedscripts'; ev='' }
+    @{ label = 'Block JavaScript / VBScript from launching'; scid='scid-2504'; rule='blockjavascriptorvbscriptfromlaunchingdownloadedexecutablecontent'; ev='' }
+    @{ label = 'Block Office applications from creating executable content'; scid='scid-2502'; rule='blockofficeapplicationsfromcreatingexecutablecontent'; ev='ExecutableOfficeContent' }
+    @{ label = 'Block Office applications from injecting code'; scid='scid-2503'; rule='blockofficeapplicationsfrominjectingcodeintootherprocesses'; ev='OfficeProcessInjection' }
+    @{ label = 'Block Office communication application from creating child processes'; scid='scid-2512'; rule='blockofficecommunicationappfromcreatingchildprocesses'; ev='OfficeCommAppChildProcess' }
+    @{ label = 'Block persistence through WMI event subscription'; scid='scid-2514'; rule='blockpersistencethroughwmieventsubscription'; ev='' }
+    @{ label = 'Block process creations originating from PSExec and WMI'; scid='scid-2510'; rule='blockprocesscreationsfrompsexecandwmicommands'; ev='PsexecWmiChildProcess' }
+    @{ label = 'Block rebooting machine in Safe Mode'; scid='scid-2518'; rule='blockrebootingmachineinsafemode'; ev='' }
+    @{ label = 'Block untrusted and unsigned processes that run from USB'; scid='scid-2511'; rule='blockuntrustedunsignedprocessesthatrunfromusb'; ev='' }
+    @{ label = 'Block use of copied or impersonated system tools'; scid='scid-2517'; rule='blockuseofcopiedorimpersonatedsystemtools'; ev='AbusedSystemTool' }
+    @{ label = 'Block Webshell creation for servers'; scid=''; rule='blockwebshellcreationforservers'; ev='' }
+    @{ label = 'Block Win32 API calls from Office macros'; scid='scid-2506'; rule='blockwin32apicallsfromofficemacros'; ev='' }
+    @{ label = 'Use advanced protection against ransomware'; scid='scid-2508'; rule='useadvancedprotectionagainstransomware'; ev='' }
+    @{ label = 'Controlled folder access'; scid='scid-2021'; rule=''; ev='' }
+)
+
+$asrByRule = @{}
+foreach ($r in @($d.tables.asrRules)) { $asrByRule[("$($r.rule)".ToLower())] = $r.mode }
+$asrEvByName = @{}
+foreach ($e in @($d.tables.asrEvents)) { $asrEvByName[("$($e.rule)".ToLower())] = $e }
+
+$MODE_OPTS2 = @(@('', 'Not configured'), @('pass', 'Block'), @('partial', 'Audit'), @('fail', 'Disabled'), @('na', 'Warn'))
+
+$script:cfgFilled = 0
+$html = [regex]::Replace($html, '(?s)<tr>(?:(?!</tr>).)*</tr>', {
+    param($rm)
+    $row = $rm.Value
+    if ($row -notmatch 'data-ph=|<td class="sel">|<td class="mode">') { return $row }
+    $first = [regex]::Match($row, '(?s)<td[^>]*>(.*?)</td>')
+    if (-not $first.Success) { return $row }
+    $label = (($first.Groups[1].Value -replace '<[^>]+>', ' ') -replace '&amp;', '&' -replace '\s+', ' ').Trim()
+    if (-not $label) { return $row }
+
+    # --- ASR kural satiri mi? ---
+    $asrHit = $ASR_MAP | Where-Object { $label -like "$($_.label)*" } | Select-Object -First 1
+    if ($asrHit) {
+        $mode = $asrByRule[$asrHit.rule]
+        if ($mode) {
+            $v = switch ($mode) { 'Block' { 'pass' } 'Audit' { 'partial' } 'Warn' { 'na' } 'Disabled' { 'fail' } default { '' } }
+            $row = $row -replace '<td class="mode"></td>', ('<td class="mode">' + (New-Select 'st' $MODE_OPTS2 $v) + '</td>')
+            $script:cfgFilled++
+        }
+        $ev = if ($asrHit.ev) { $asrEvByName[$asrHit.ev.ToLower()] } else { $null }
+        $cfg = if ($asrHit.scid) { Cfg-Cell $asrHit.scid } else { $null }
+        # Exclusions | Audit events sutunlari
+        $script:asrVals = @(
+            $(if ($cfg) { "$($cfg.pct)% coverage" } else { '' }),
+            $(if ($ev) { "$($ev.events)" } else { $(if ($mode -eq 'Audit') { '0' } else { '' }) })
+        )
+        $script:asrIdx = 0
+        $row = [regex]::Replace($row, '<td class="num f"([^>]*)></td>', {
+            param($cm)
+            if ($script:asrIdx -ge $script:asrVals.Count) { return $cm.Value }
+            $val = $script:asrVals[$script:asrIdx]; $script:asrIdx++
+            if ("$val" -eq '') { return $cm.Value }
+            "<td class=`"num f`"$($cm.Groups[1].Value)>$val</td>"
+        })
+        return $row
+    }
+
+    # --- scid ile eslesen kontrol satiri mi? ---
+    # NOT: yerel degisken adi haritanin adiyla ayni olamaz ($scid = $SCID)
+    $hitScid = $null
+    foreach ($k in $CTRL_SCID.Keys) { if ($label -match $k) { $hitScid = $CTRL_SCID[$k]; break } }
+    if (-not $hitScid) { return $row }
+    $c = Cfg-Cell $hitScid
+    if (-not $c) { return $row }
+
+    # Observed hucresi: satirin ilk bos duzenlenebilir hucresi
+    $m = [regex]::Match($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>')
+    if ($m.Success) {
+        $repl = "<td$($m.Groups[1].Value)><span class=`"draft`">$(Esc $c.text)</span></td>"
+        $row = $row.Remove($m.Index, $m.Length).Insert($m.Index, $repl)
+    }
+    $row = $row -replace '<td class="sel"></td>', ('<td class="sel">' + (New-Select 'st' $ST_OPTS $c.status) + '</td>')
+    $script:cfgFilled++
+    return $row
+})
+
+# Tamper KPI'si toplayicida yanlis eslesebiliyor (LDAP "tampering" satirina takiliyor) -
+# elimizde scid varsa dogrusunu yaz
+$tp = Cfg-Cell 'scid-2003'
+if ($tp) {
+    $html = [regex]::Replace($html,
+        '(<div class="v f" contenteditable data-ph="[^"]*">)(?:[^<]*)(</div><div class="k">Tamper protection on</div>)',
+        { param($m) "$($m.Groups[1].Value)$($tp.pct)%$($m.Groups[2].Value)" }, 1)
+}
+
 # ---------------------------------------------------- BOLUM 01 TABLOLARI --
 # In Scope: cihaz envanterinden kategori bazinda topla
 if ($d.tables.deviceInventory) {
@@ -992,7 +1137,7 @@ Set-Content -Path $OutFile -Value $html -Encoding utf8
 
 Write-Host ''
 Write-Host "  Rapor yazıldı: $OutFile" -ForegroundColor Green
-Write-Host "  Dolduruldu: $($filled.charts) grafik, $($filled.kpi) KPI, $($filled.rows) tablo satırı, $($filled.fields) alan" -ForegroundColor DarkGray
+Write-Host "  Dolduruldu: $($filled.charts) grafik, $($filled.kpi) KPI, $($filled.rows + $script:cfgFilled) tablo satırı, $($filled.fields) alan" -ForegroundColor DarkGray
 Write-Host "  Taslak metin: $($script:draftCount + $script:bpCount) adet (REVIEW) isaretli — tarayicida tek tek onaylayin." -ForegroundColor DarkGray
 Write-Host ''
 try { Start-Process (Resolve-Path $OutFile) } catch { }
