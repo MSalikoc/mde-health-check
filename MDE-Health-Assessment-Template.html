@@ -299,6 +299,7 @@ body.nodata .datahint{display:none}
   <button class="ghost" onclick="document.body.classList.toggle('guides')">Toggle field outlines</button>
   <button class="ghost" onclick="document.body.classList.toggle('nodata')">Toggle chart data tables</button>
   <span class="cnt" id="draftCount" title="Draft texts awaiting review">0 review pending</span>
+  <button class="ghost" onclick="clearDrafts()" title="Tüm (REVIEW) işaretlerini tek seferde kaldırır">✓ Approve all</button>
   <button class="ghost" onclick="resetDoc()">↺ Reset</button>
   <span class="sp"></span>
   <span class="hint">Click any text to edit · Enter numbers in the table under each chart · Click a (REVIEW) tag to approve that draft · Changes are saved in this browser</span>
@@ -2475,8 +2476,16 @@ function updateDraftCount(){
   const el=document.getElementById('draftCount');
   if(el){const n=document.querySelectorAll('.draft').length;el.textContent=n+' review pending';el.style.opacity=n?1:.45;}
 }
-/* Toplu kaldirma bilerek yok: her taslak tek tek review edilmeli.
-   (REVIEW) rozetine tikla -> yalnizca o taslak onaylanir. Alt+tik da calisir. */
+/* Toplu onay: sayfanin tamamindaki (REVIEW) isaretlerini kaldirir.
+   Tek tek onay icin rozete tikla, ya da metnin herhangi bir yerine Alt+tik. */
+function clearDrafts(){
+  const list=document.querySelectorAll('.draft');
+  if(!list.length){alert('No (REVIEW) marks left.');return;}
+  if(!confirm(list.length+' draft texts are still marked (REVIEW).\n\nApprove all of them and remove the marks?\n\nThe text itself stays; only the yellow marks are removed.')) return;
+  list.forEach(unwrapDraft);
+  updateDraftCount(); save();
+}
+
 document.addEventListener('click',e=>{
   const d=e.target.closest?e.target.closest('.draft'):null;
   if(!d) return;
@@ -2507,7 +2516,7 @@ function toggleToc(){document.getElementById('toc').classList.toggle('on');}
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-06-r2';
+const DOCVER='2026-08-07-approveall';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
