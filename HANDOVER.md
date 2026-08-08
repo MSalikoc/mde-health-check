@@ -1,6 +1,10 @@
 # Handover — project state
 
-Written 2026-08-07. Read this first when picking the project up in a new session.
+Read this first when picking the project up in a new session.
+
+**This file lives at `~/Desktop/CLAUDEPRO/mde-assessment-tooling/HANDOVER.md`** — the same copy is
+committed to the private repo. Edit the local one and copy it into the repo, not the other way round;
+`/tmp/mderepo` and `/tmp/mdepublic` are throwaway clones that may not exist in a later session.
 
 ## What this is
 
@@ -64,19 +68,34 @@ Everything the renderer generates is wrapped in `<span class="draft">` and shows
 7. **PowerShell treats smart quotes (U+2018/2019/201C/201D) as string delimiters.** A Turkish
    apostrophe inside a single-quoted string shifted every quote pair in the file. `Test-Parse.ps1`
    now warns about this.
-8. **Match configuration controls by scid, not by name.** `'tamper'` matched "prevent tampering"
+8. **`"$var:"` is a parse error** — PowerShell reads the colon as a scope separator. Write
+   `"${var}:"`. It fails at parse time, so the whole script refuses to run.
+9. **Match configuration controls by scid, not by name.** `'tamper'` matched "prevent tampering"
    (LDAP, 0%) instead of "Turn on Tamper Protection" (100%) and the report claimed tamper
    protection was disabled everywhere.
 
+## Session log
+
+**2026-08-08** — app-only authentication was exercised on the test tenant
+(`af80ebe6-b601-49c4-89b9-381499b97ba6`). Exposure score, security recommendations and indicators
+came back, so the app registration, the `appRoleAssignments` consent, the client secret and the
+client-credentials token path all work. The Conditional Access bypass itself still has to be proven
+at a tenant that actually blocks the resource.
+
+Two new warnings appeared in that run: `DeviceTvmHardwareFirmware` and `DeviceTvmBrowserExtensions`
+return **400 Bad Request**. This is not a query defect — those tables belong to the Defender
+Vulnerability Management add-on, and the same run already warned that no Defender SKU is present in
+the tenant. The collector now treats these two queries as optional and records a calm note instead
+of a failure warning.
+
 ## Open items
 
-- **App-only authentication is written but never executed.** `New-MdeApp.ps1 -AppOnly` adds Defender
+- **App-only authentication was verified on the test tenant, not yet at a blocked tenant.** `New-MdeApp.ps1 -AppOnly` adds Defender
   *application* permissions, grants them through `appRoleAssignments` and creates a client secret;
   `MDE-Collect.ps1` uses client credentials for the Defender resource when a secret is present. This
   exists because exposure score, recommendations and indicators failed at two tenants with
   `AADSTS50131` — a Conditional Access policy requiring a registered device, which a device code
-  sign-in can never satisfy. Test it: the plumbing (app creation, consent, secret, token) can be
-  proven on any tenant; the CA bypass itself can only be proven where the block exists.
+  sign-in can never satisfy. The plumbing is proven; run it at a blocked tenant to confirm the bypass.
 - The private repo still carries a stale `MDE-Collect.ps1` with none of the collector fixes. Collection
   is done with the public repo, so it is unused — delete it or sync it.
 - Sections that no API can fill: tenant/portal settings (data region, retention, preview features,
