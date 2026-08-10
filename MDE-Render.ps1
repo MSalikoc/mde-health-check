@@ -52,6 +52,24 @@ if (-not $OutFile) {
 
 function Esc([string]$s) { $s -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' }
 
+# Toplanamayan bir tablo icin ConvertFrom-Json $null dondurur; @($null) tek elemanli
+# NULL dizi uretir ve ilk property erisiminde "array index evaluated to null" hatasi
+# verir. Bir tablo her zaman opsiyoneldir - API bloke olabilir - bu yuzden tum tablo
+# okumalari buradan gecer.
+function Rows($Table) { return @($Table | Where-Object { $null -ne $_ }) }
+
+# Alan puani (0-100) -> olgunluk seviyesi (1-5). Bantlar MANUAL-FIELDS.md'de tanimli;
+# 95 ve 60 sinirlari checklist'in Compliant/Partial esikleriyle ayni olsun diye secildi.
+# BURADAN BASKA YERDE seviye hesaplamayin - grafik, tablo ve dokuman ayrilirsa rapor kendi
+# icinde celisir.
+function Level([double]$Score) {
+    if ($Score -ge 95) { return 5 }
+    if ($Score -ge 85) { return 4 }
+    if ($Score -ge 60) { return 3 }
+    if ($Score -ge 30) { return 2 }
+    return 1
+}
+
 # ------------------------------------------------------------- GRAFİKLER --
 # <div class="chart" data-type="..."> … <div class="ct">Başlık</div> … <table class="data"> … </table> … </div>
 
@@ -60,7 +78,24 @@ function Esc([string]$s) { $s -replace '&', '&amp;' -replace '<', '&lt;' -replac
 #  Toplayicinin uretemedigi ama toplanan veriden hesaplanabilen alanlar.
 #  Grafik doldurma pasindan ONCE calisir ki $d.charts'a eklenenler de islensin.
 # ============================================================================
-$cfgAll = @($d.tables.secureConfiguration)
+$cfgAll = Rows $d.tables.secureConfiguration
+
+# Bir alan puaninin nereden geldigini tek cumlede anlatir: kac kontrolun ortalamasi ve
+# ortalamanin sakladigi en zayif iki kontrol. Ortalama, %100'deki kontrollerin arkasina
+# %11'deki tamper protection'i saklayabiliyor - rakamin yanina kaniti koymadan seviye
+# yazmak yaniltici olur.
+function Sub-Evidence {
+    param([string]$Subcategory)
+    $rows = @($cfgAll | Where-Object { $_.subcategory -eq $Subcategory })
+    if ($rows.Count -eq 0) { return '' }
+    $avg = [math]::Round(($rows | Measure-Object compliance -Average).Average)
+    $weak = @($rows | Sort-Object compliance | Select-Object -First 2 |
+              Where-Object { [double]$_.compliance -lt 60 } |
+              ForEach-Object { "$($_.name) $([math]::Round([double]$_.compliance))%" })
+    $txt = "Mean $avg% across $($rows.Count) $Subcategory controls"
+    if ($weak.Count) { $txt += "; the mean hides $($weak -join ' and ')" }
+    return "$txt."
+}
 
 function Sub-Avg {
     param([string]$Subcategory)
@@ -90,9 +125,9 @@ function Kpi-Num {
 if ($d.tables.findings) {
     $tamperPct = Scid-Pct 'scid-2003'
     if ($null -ne $tamperPct -and $tamperPct -ge 95) {
-        $before = @($d.tables.findings).Count
+        $before = (Rows $d.tables.findings).Count
         $d.tables.findings = @($d.tables.findings | Where-Object { $_.finding -notmatch 'Tamper protection is enabled on only' })
-        $after = @($d.tables.findings).Count
+        $after = (Rows $d.tables.findings).Count
         if ($after -lt $before) {
             $i = 1
             foreach ($f in $d.tables.findings) { $f.id = 'F-{0:D2}' -f $i; $i++ }
@@ -162,7 +197,7 @@ $lic = @{
 # --------------------------------------- OLGUNLUK: MEVCUT vs HEDEF (1-5) --
 if ($dom) {
     $five = @{}
-    foreach ($k in $dom.Keys) { if ($null -ne $dom[$k]) { $five[$k] = [math]::Max(1, [math]::Round($dom[$k] / 20)) } }
+    foreach ($k in $dom.Keys) { if ($null -ne $dom[$k]) { $five[$k] = Level $dom[$k] } }
     if ($five.Count) {
         $labels = @('Deployment','Protection','ASR','TVM','EDR','Hunting','Integration','Governance')
         $src = @('Deployment & Onboarding','Next-Generation Protection','Attack Surface Reduction',
@@ -292,7 +327,7 @@ if ($d.tables.topVulnerableSoftware) {
         $script:swIdx = 0
         $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
             param($rm)
-            $sw = @($d.tables.topVulnerableSoftware)
+            $sw = Rows $d.tables.topVulnerableSoftware
             if ($script:swIdx -ge $sw.Count) { $script:swIdx++; return $rm.Value }
             $s = $sw[$script:swIdx]; $script:swIdx++
             $script:filled.rows++
@@ -312,7 +347,7 @@ if ($d.tables.secureScoreActions) {
         $script:ssIdx = 0
         $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
             param($rm)
-            $a = @($d.tables.secureScoreActions)
+            $a = Rows $d.tables.secureScoreActions
             if ($script:ssIdx -ge $a.Count) { $script:ssIdx++; return $rm.Value }
             $x = $a[$script:ssIdx]; $script:ssIdx++
             $script:filled.rows++
@@ -351,11 +386,17 @@ function Strip-Tags {
 function Fill-Rows {
     param(
         [string]$Heading,     # tabloyu bulmak icin onundeki h3 metni (bos ise ilk tablo)
-        [hashtable]$Map
+        [hashtable]$Map,
+        [string]$HeaderCell   # h3'u olmayan tablolar icin: tabloya ait benzersiz <th> metni
     )
     $anchor = if ($Heading) { [regex]::Escape($Heading) } else { '' }
     # h3 basliginda class olabilir (<h3 class="mt0">...)
-    $rx = if ($Heading) {
+    $rx = if ($HeaderCell) {
+        # Bazi tablolarin kendi h3'u yok (ornegin Bolum 14 governance tablosu, RBAC
+        # basligi altindaki ikinci tablo). Onlari kendi sutun basligindan yakala.
+        $hc = [regex]::Escape($HeaderCell)
+        [regex]("(?s)(<table class=`"t[^`"]*`">\s*<thead>(?:(?!</table>).)*?$hc(?:(?!</table>).)*?</thead>)(.*?)(</table>)")
+    } elseif ($Heading) {
         # baslik ile tablo arasinda aciklama paragrafi olabilir; baska h3'e gecmeden ilk tabloyu al
         [regex]("(?s)(<h3[^>]*>$anchor</h3>(?:(?!<h3).)*?<table class=`"t[^`"]*`">)(.*?)(</table>)")
     } else { $null }
@@ -424,8 +465,22 @@ if ($d.tables.findings) {
             'Accepted'    { 'na' }
             default       { 'fail' }
         }
+        # Due, toplayici doldurmadiysa raporun kendi severity tanimindan turer
+        # (Bolum 01: Critical hemen, High 30 gun, Medium 90 gun, Low rutin is).
+        # Efor ve sahip bilerek bos birakilir - MANUAL-FIELDS.md'ye bakin.
+        $due = $f.due
+        if (-not $due) {
+            $base = try { [datetime]::Parse($d.meta.generatedUtc) } catch { Get-Date }
+            $due = switch ($sev) {
+                'critical' { 'Immediate' }
+                'high'     { $base.AddDays(30).ToString('dd.MM.yyyy') }
+                'medium'   { $base.AddDays(90).ToString('dd.MM.yyyy') }
+                'low'      { 'Next review' }
+                default    { '' }
+            }
+        }
         $map["^$([regex]::Escape($f.id))$"] = @{
-            v      = @($f.finding, $f.domain, $f.effort, $f.owner, $f.due)
+            v      = @($f.finding, $f.domain, $f.effort, $f.owner, $due)
             sev    = $sev
             status = $st
         }
@@ -548,7 +603,7 @@ if ($d.tables.deviceInventory) {
 
 # ----------------------------------------------- AJAN / SURUM GUNCELLIGI --
 if ($d.tables.agentVersions) {
-    $script:verRows = @($d.tables.agentVersions)
+    $script:verRows = Rows $d.tables.agentVersions
     $script:verIdx = 0
     $rxVer = [regex]'(?s)(<h3[^>]*>Agent &amp; Platform Version Currency</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
     if ($rxVer.IsMatch($script:html)) {
@@ -576,7 +631,7 @@ if ($d.tables.agentVersions) {
 
 # ------------------------------------------------ EK B: KULLANILAN KQL ----
 if ($d.tables.queries) {
-    $script:qRows = @($d.tables.queries)
+    $script:qRows = Rows $d.tables.queries
     $script:qIdx = 0
     $rxQ = [regex]'(?s)(<h3[^>]*>Advanced Hunting Queries Used</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
     if ($rxQ.IsMatch($script:html)) {
@@ -638,7 +693,7 @@ $script:html = [regex]::Replace($script:html, '(?s)<tr><td>([A-Z][^<]{4,40})</td
 })
 
 # ------------------------------------------------- ONCELIK MATRISI --------
-$pmF = @($d.tables.findings)
+$pmF = Rows $d.tables.findings
 if ($pmF.Count) {
     # effort alani toplayicida bos gelebilir: o durumda Critical = hemen yapilacak
     $hiLow  = @($pmF | Where-Object { $_.effort -eq 'Low' -or (-not $_.effort -and $_.severity -eq 'Critical') })
@@ -705,6 +760,74 @@ if ($d.tables.privilegedRoles) {
     Fill-Rows -Heading 'Role-Based Access Control' -Map $map | Out-Null
 }
 
+# ------------------------------------------------- YONETISIM KONTROLLERI --
+# Bolum 14'un governance tablosunun kendi h3'u yok - kendi sutun basligindan yakalanir.
+$govMap = @{}
+$mg = @($d.raw.machineGroups | Where-Object { $_.MachineGroup })
+if ($d.raw.machineGroups) {
+    $govMap['RBAC enabled'] = if ($mg.Count -gt 0) {
+        @{ v = @("$($mg.Count) device groups defined"); status = 'pass'; draft = $true }
+    } else {
+        @{ v = @('No device groups - every device sits in the default group'); status = 'fail'; draft = $true }
+    }
+}
+if ($null -ne $d.meta.pimEligibleAssignments) {
+    $pim = [int]$d.meta.pimEligibleAssignments
+    $govMap['Privileged Identity Management'] = if ($pim -gt 0) {
+        @{ v = @("$pim eligible (time-bound) assignments"); status = 'pass'; draft = $true }
+    } else {
+        @{ v = @('No eligible assignments - all privileged access is standing'); status = 'fail'; draft = $true }
+    }
+}
+$ca = @(Rows $d.tables.conditionalAccess)[0]
+if ($ca) {
+    $govMap['MFA enforced for admin roles'] = @{
+        v = @("$($ca.enabledPolicies) of $($ca.totalPolicies) Conditional Access policies enabled - confirm which target directory roles")
+        status = 'partial'; draft = $true
+    }
+}
+if ($govMap.Count) { Fill-Rows -HeaderCell 'Governance control' -Map $govMap | Out-Null }
+
+# --------------------------------------------------- ENTEGRASYON ANAHTARI --
+$intMap = @{}
+if ($ca) {
+    $intMap['Device risk .*Conditional Access'] = @{
+        v = @("$($ca.deviceComplianceCA) of $($ca.totalPolicies) policies require device compliance; device risk signals $(if ($ca.deviceRiskUsed) { 'are in use' } else { 'are not used' })")
+        status = $(if ([int]$ca.deviceComplianceCA -gt 0) { 'partial' } else { 'fail' }); draft = $true
+    }
+}
+if ($d.tables.intunePolicies) {
+    $intMap['Microsoft Intune connection'] = @{
+        v = @("$(@(Rows $d.tables.intunePolicies).Count) Intune configuration policies were readable, so the connection is live")
+        status = 'pass'; draft = $true
+    }
+}
+if ($intMap.Count) { Fill-Rows -Heading 'Advanced Features &amp; Integration Switches' -Map $intMap | Out-Null }
+
+# ------------------------------------------------------------ INDICATORS --
+# tables.indicators toplaniyordu ama hicbir yere yazilmiyordu.
+$ind = Rows $d.tables.indicators
+if ($ind.Count) {
+    $byType = @{}
+    foreach ($i in $ind) { $byType[$i.type] = $i }
+    $sum = { param($pat) (@($ind | Where-Object { $_.type -match $pat } | Measure-Object count -Sum).Sum) }
+    $hash = [int](& $sum 'FileSha|FileMd5|FileHash')
+    $net  = [int](& $sum 'IpAddress|Url|DomainName')
+    $cert = [int](& $sum 'Certificate')
+    $noExp = [int]((@($ind | Measure-Object withoutExpiry -Sum).Sum))
+    $total = [int]((@($ind | Measure-Object count -Sum).Sum))
+    $indMap = @{
+        'Indicators \(file hash\)'   = @{ v = @("$hash file hash indicators"); status = $(if ($hash) { 'pass' } else { 'na' }); draft = $true }
+        'Indicators \(IP / URL / domain\)' = @{ v = @("$net network indicators"); status = $(if ($net) { 'pass' } else { 'na' }); draft = $true }
+        'Indicators \(certificates\)' = @{ v = @("$cert certificate indicators"); status = $(if ($cert) { 'pass' } else { 'na' }); draft = $true }
+        'Indicator expiry'            = @{
+            v = @("$noExp of $total indicators carry no expiry date")
+            status = $(if ($noExp -eq 0) { 'pass' } elseif ($noExp -lt $total) { 'partial' } else { 'fail' }); draft = $true
+        }
+    }
+    Fill-Rows -Heading 'Threat Analytics &amp; Threat Intelligence' -Map $indMap | Out-Null
+}
+
 # ------------------------------------------------------------- SOC KPI ---
 if ($d.tables.socKpi) {
     $map = @{}
@@ -716,7 +839,7 @@ if ($d.tables.socKpi) {
 
 # ------------------------------------------------- EXCLUSION HIJYENI -----
 if ($d.tables.avExclusions) {
-    $all = @($d.tables.avExclusions)
+    $all = Rows $d.tables.avExclusions
     $paths = @($all | Where-Object { $_.value -match '\\' })
     $exts  = @($all | Where-Object { $_.value -match '^\*?\.\w+$' })
     $procs = @($all | Where-Object { $_.value -match '\.exe$' })
@@ -730,7 +853,7 @@ if ($d.tables.avExclusions) {
 
 # ------------------------------------------- OZEL TESPIT KURALLARI -------
 if ($d.tables.customDetections -and @($d.tables.customDetections).Count -gt 0) {
-    $rules = @($d.tables.customDetections)
+    $rules = Rows $d.tables.customDetections
     $script:cdIdx = 0
     $rx = [regex]'(?s)(<h3>Custom Detection Rule Inventory</h3>\s*<table class="t compact">.*?<tbody>)(.*?)(</tbody>)'
     $script:html = $rx.Replace($script:html, {
@@ -805,7 +928,7 @@ function HasK {
     return ($null -ne $v -and "$v" -ne '')
 }
 
-$fnd = @($d.tables.findings)
+$fnd = Rows $d.tables.findings
 $crit = @($fnd | Where-Object { $_.severity -eq 'Critical' })
 $high = @($fnd | Where-Object { $_.severity -eq 'High' })
 $med  = @($fnd | Where-Object { $_.severity -eq 'Medium' })
@@ -1149,7 +1272,7 @@ $bp = [ordered]@{
 #  islenir: Observed = "%X of N devices", Status = esige gore rozet.
 #  Eslesme scid ile yapilir - isim benzerligi yanlis satiri doldurabilir.
 # ============================================================================
-$cfgRows = @($d.tables.secureConfiguration)
+$cfgRows = Rows $d.tables.secureConfiguration
 $cfgById = @{}
 foreach ($c in $cfgRows) { $cfgById[$c.id] = $c }
 
@@ -1414,6 +1537,146 @@ if ($CHK.Count -gt 0) {
     $filled.rows += $script:chkFilled
 }
 
+# ============================================================================
+#  OLGUNLUK TABLOSU (Bolum 18)
+#  $dom / $five zaten hesaplaniyordu ve iki grafige de ciziliyordu; tablo bos
+#  kaliyordu. Ayni kaynaktan yazilir - grafik ile tablo asla ayrismasin.
+# ============================================================================
+$MAT_ROWS = [ordered]@{
+    'Deployment &amp; onboarding'      = 'Deployment & Onboarding'
+    'Next-generation protection'       = 'Next-Generation Protection'
+    'Attack surface reduction'         = 'Attack Surface Reduction'
+    'Vulnerability management'         = 'Vulnerability Management'
+    'EDR &amp; automation'             = 'EDR & Automation'
+    'Threat hunting &amp; intelligence' = ''
+    'Integration &amp; SIEM'           = 'Integration & SIEM'
+    'Governance &amp; RBAC'            = 'Identity & Access (RBAC)'
+    'Security operations'              = 'Security Operations'
+}
+$MAT_ACTION = @{
+    'Deployment & Onboarding'    = 'Onboard the remaining discovered devices and close the gap per platform.'
+    'Next-Generation Protection' = 'Bring the antivirus controls below target to the baseline configuration across the estate.'
+    'Attack Surface Reduction'   = 'Move the attack surface reduction rules from audit to block and confirm they apply on devices, not only in policy.'
+    'Vulnerability Management'   = 'Work the exposed device list from the security recommendations by exposure, starting with the critical CVEs.'
+    'EDR & Automation'           = 'Restore sensor health on the impaired devices and confirm data collection resumes.'
+    'Security Operations'        = 'Close the open alerts and define the response SLA the resolution rate is measured against.'
+}
+# NOT: 'Vulnerability management' Bolum 16'da, 'Attack surface reduction' Bolum 03'te de
+# satir basligi. Belge genelinde Replace(...,1) yanlis tabloyu yakalar - once tabloyu
+# "Key action to close the gap" basligindan izole edip degisimi onun icinde yapiyoruz.
+if ($five -and $five.Count) {
+    $rxTable = [regex]'(?s)(<table[^>]*>\s*<thead>(?:(?!</table>).)*?Key action to close the gap(?:(?!</table>).)*?</thead>\s*<tbody>)(.*?)(</tbody>)'
+    if ($rxTable.IsMatch($script:html)) {
+        $script:matFilled = 0
+        $script:html = $rxTable.Replace($script:html, {
+            param($tm)
+            $body = $tm.Groups[2].Value
+            foreach ($label in $MAT_ROWS.Keys) {
+                $key = $MAT_ROWS[$label]
+                if (-not $key -or -not $five.ContainsKey($key)) { continue }
+                $cur = [int]$five[$key]
+                $tgt = [math]::Min(5, $cur + 1)
+                $act = if ($MAT_ACTION.ContainsKey($key)) { $MAT_ACTION[$key] } else { "Raise $key to level $tgt." }
+                # Seviyenin dayanagini hucreye yaz - "3" tek basina savunulamaz
+                $ev = switch ($key) {
+                    'Next-Generation Protection' { Sub-Evidence 'Antivirus' }
+                    'Attack Surface Reduction'   { Sub-Evidence 'Attack Surface Reduction' }
+                    'EDR & Automation'           { Sub-Evidence 'EDR' }
+                    'Deployment & Onboarding'    { "Onboarding rate $($dom[$key])%." }
+                    'Vulnerability Management'   { "Secure score for devices $($dom[$key])%." }
+                    'Security Operations'        { "$($dom[$key])% of alerts in the window were resolved." }
+                    default                      { '' }
+                }
+                if ($ev) { $act = "$ev $act" }
+                $script:matCells = @("$cur", "$tgt", "+$($tgt - $cur)", $act)
+                $rxRow = [regex]("(?s)(<tr><td>" + [regex]::Escape($label) + "</td>)(.*?)(</tr>)")
+                if (-not $rxRow.IsMatch($body)) { continue }
+                $body = $rxRow.Replace($body, {
+                    param($m)
+                    $script:matIdx = 0
+                    $cells = [regex]::Replace($m.Groups[2].Value, '<td([^>]*data-ph="[^"]*")></td>', {
+                        param($cm)
+                        if ($script:matIdx -ge $script:matCells.Count) { return $cm.Value }
+                        $v = $script:matCells[$script:matIdx]; $script:matIdx++
+                        $script:draftCount++
+                        "<td$($cm.Groups[1].Value)><span class=`"draft`">$(Esc $v)</span></td>"
+                    })
+                    "$($m.Groups[1].Value)$cells$($m.Groups[3].Value)"
+                }, 1)
+                $script:matFilled++
+            }
+            "$($tm.Groups[1].Value)$body$($tm.Groups[3].Value)"
+        }, 1)
+        $filled.rows += $script:matFilled
+    }
+}
+
+# ============================================================================
+#  KAPAK KPI: OVERALL MATURITY ve CONTROL COMPLIANCE
+#  Ikisi de hicbir yerde hesaplanmiyordu; kurallari MANUAL-FIELDS.md'de yazili.
+#  KPI regex pasindan (dosyanin basi) cok sonra calisiyoruz - checklist sonuclari
+#  ancak burada hazir - o yuzden iki kutuyu dogrudan hedefleyerek yaziyoruz.
+# ============================================================================
+$MAT_NAME = @{ 1 = 'Initial'; 2 = 'Defined'; 3 = 'Managed'; 4 = 'Integrated'; 5 = 'Optimised' }
+function Set-CoverKpi {
+    param([string]$Label, [string]$Value, [string]$Desc)
+    $rx = [regex]('(?s)(<div class="v f" contenteditable data-ph="[^"]*">)</div>(<div class="k">' +
+                  [regex]::Escape($Label) + '</div><div class="d f" contenteditable data-ph="[^"]*">)</div>')
+    if (-not $rx.IsMatch($script:html)) { return $false }
+    $script:kpiVal = $Value; $script:kpiDesc = $Desc
+    $script:html = $rx.Replace($script:html, {
+        param($m)
+        $script:draftCount += 2
+        "$($m.Groups[1].Value)<span class=`"draft`">$(Esc $script:kpiVal)</span></div>" +
+        "$($m.Groups[2].Value)<span class=`"draft`">$(Esc $script:kpiDesc)</span></div>"
+    }, 1)
+    return $true
+}
+
+# Overall maturity: puani olan alanlarin ortalamasinin asagi yuvarlanmasi; herhangi bir
+# cekirdek alan seviye 1'deyse 3 ile sinirli (bkz. MANUAL-FIELDS.md).
+if ($five -and $five.Count) {
+    $core = @('Deployment & Onboarding','Next-Generation Protection','Attack Surface Reduction',
+              'Vulnerability Management','EDR & Automation')
+    $vals = @($five.Values | ForEach-Object { [int]$_ })
+    $overall = [math]::Floor(($vals | Measure-Object -Average).Average)
+    $weakCore = @($core | Where-Object { $five.ContainsKey($_) -and [int]$five[$_] -eq 1 })
+    if ($weakCore.Count -gt 0 -and $overall -gt 3) { $overall = 3 }
+    $overall = [math]::Max(1, [int]$overall)
+    $desc = "$($MAT_NAME[$overall]) - $($five.Count) of $($dom.Count) domains scored"
+    if ($weakCore.Count) { $desc += "; capped, $($weakCore -join ' and ') at level 1" }
+    Set-CoverKpi -Label 'Overall Maturity' -Value "$overall / 5" -Desc $desc | Out-Null
+
+    # Bolum 18'deki "Current overall maturity / Target maturity" satiri
+    $script:ovVal = "$overall"; $script:ovTgt = "$([math]::Min(5, $overall + 1))"
+    $rxOv = [regex]'(?s)(Current overall maturity:\s*<b class="f" contenteditable data-ph="\[level\]">)</b>(.*?)(<b class="f" contenteditable data-ph="\[level\]">)</b>'
+    if ($rxOv.IsMatch($script:html)) {
+        $script:html = $rxOv.Replace($script:html, {
+            param($m)
+            $script:draftCount += 2
+            "$($m.Groups[1].Value)<span class=`"draft`">$($script:ovVal)</span></b>$($m.Groups[2].Value)" +
+            "$($m.Groups[3].Value)<span class=`"draft`">$($script:ovTgt)</span></b>"
+        }, 1)
+    }
+}
+
+# Control compliance: uyumlu / degerlendirilen. "Not assessed" ve "N/A" paydaya girmez -
+# 110'a bolmek olculmemis satirlari basarisiz gostermek olur (bkz. MANUAL-FIELDS.md).
+if ($CHK -and $CHK.Count -gt 0) {
+    $assessed = @($CHK.Values | Where-Object { $_.status -in 'pass','partial','fail' })
+    if ($assessed.Count -gt 0) {
+        $pass = @($assessed | Where-Object { $_.status -eq 'pass' }).Count
+        $part = @($assessed | Where-Object { $_.status -eq 'partial' }).Count
+        $pct = [math]::Round(100 * $pass / $assessed.Count)
+        $totalRows = @([regex]::Matches($script:html, '<tr><td>[A-H]\d{1,2}</td>')).Count
+        $notAssessed = [math]::Max(0, $totalRows - $assessed.Count)
+        $desc = "$pass of $($assessed.Count) assessed controls compliant"
+        if ($part) { $desc += ", $part partial" }
+        if ($notAssessed) { $desc += "; $notAssessed of $totalRows not assessed" }
+        Set-CoverKpi -Label 'Control Compliance' -Value "$pct%" -Desc $desc | Out-Null
+    }
+}
+
 # ------------------------------------------- MISCONFIGURATION FINDINGS ----
 $worst = @($cfgAll | Where-Object { $_.applicable -ge 50 } | Sort-Object compliance | Select-Object -First 6)
 if ($worst.Count) {
@@ -1473,7 +1736,7 @@ if ($mg.Count) {
 # ---------------------------------------------------- BOLUM 01 TABLOLARI --
 # In Scope: cihaz envanterinden kategori bazinda topla
 if ($d.tables.deviceInventory) {
-    $inv = @($d.tables.deviceInventory)
+    $inv = Rows $d.tables.deviceInventory
     function ScopeText {
         param([string]$Pattern)
         $rows = @($inv | Where-Object { $_.platform -match $Pattern })
@@ -1615,7 +1878,7 @@ if ($fnd.Count -gt 0) {
 $warn = ($d.meta.warnings | ForEach-Object { "<li>$(Esc $_)</li>" }) -join ''
 $manual = ($d.manual | ForEach-Object { "<li>$(Esc $_)</li>" }) -join ''
 $note = @"
-<section class="page" data-toc="Toplama Notu (otomatik)" data-grp="Giriş">
+<section class="page" data-toc="Collection Notes (automatic)" data-grp="Collector">
   <div class="body">
     <div class="eyebrow">Collector output</div>
     <h2>Automated Collection Notes</h2>

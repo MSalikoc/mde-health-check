@@ -73,6 +73,13 @@ Everything the renderer generates is wrapped in `<span class="draft">` and shows
 9. **Match configuration controls by scid, not by name.** `'tamper'` matched "prevent tampering"
    (LDAP, 0%) instead of "Turn on Tamper Protection" (100%) and the report claimed tamper
    protection was disabled everywhere.
+10. **`@($null)` is a one-element array holding `$null`, not an empty array.** A table the collector
+    could not produce — a blocked API, an older JSON — made the renderer die at the first property
+    access with "array index evaluated to null". Every table read now goes through the `Rows`
+    helper, which filters nulls. Any table can be absent; never assume one is there.
+11. **`ConvertFrom-Json` refuses keys that differ only in casing.** `sample-data.json` carried both
+    `Exposure Score` and `Exposure score` and could not be loaded at all. The duplicate was never
+    needed: PowerShell `-eq` on strings is case-insensitive, so one key fills both KPI boxes.
 
 ## Session log
 
@@ -88,22 +95,60 @@ Vulnerability Management add-on, and the same run already warned that no Defende
 the tenant. The collector now treats these two queries as optional and records a calm note instead
 of a failure warning.
 
+**2026-08-09** — the report chrome is fully English. The table of contents carried 24 Turkish entries
+and 7 Turkish group names; the ☰ Contents panel was the only Turkish thing a customer could see.
+Those, the "Approve all" tooltip, the reset confirmation and one chart hint are now English, and
+`DOCVER` was bumped so browsers with a cached copy pick the new template up. The collection-note page
+the renderer appends moved from `data-grp="Giriş"` to its own `Collector` group — it used to emit a
+second "Giriş" heading at the bottom of the contents list.
+
+`MDE-Health-Assessment-SAMPLE.html` was **not** re-rendered from `sample-data.json`: the sample holds
+around 130 KB of hand-written narrative that exists in neither the template nor the renderer, and a
+fresh render would have thrown all of it away. Instead the current shell — head, styles, toolbar,
+contents panel and script — was transplanted onto the sample's own `#doc` body, which is exactly the
+part that was out of date. Verified in a browser: 24 English entries, 37 charts drawn, no console
+errors.
+
+The stale `MDE-Collect.ps1` is gone from this repo, and so is `New-MdeApp.ps1`, which was stale too
+(290 lines against 374 in the collector repo — the whole `-AppOnly` work was missing) and which the
+earlier handover had not spotted. `README.md` and `BASLA-WINDOWS.md` now send steps 2–4 to
+`mde-data-collector`. `Test-Parse.ps1` stayed: it is byte-identical in both repos and globs whatever
+`.ps1` files are in the folder.
+
+**2026-08-09 (later)** — `MANUAL-FIELDS.md` was written, because "fill it in by hand" without a
+written rule means a different answer every engagement. It defines the two cover KPIs that nothing
+computes (`Overall Maturity`, `Control Compliance`), the five maturity levels the template had only
+ever named, the severity and effort rubrics, the roadmap bands and the portal-only lookups.
+
+Two things surfaced while writing it. The renderer's `Max(1, Round($score/20))` inherits .NET
+banker's rounding, so its real bands are 1: 0–29, 2: 30–50, 3: 51–69, 4: 70–94, 5: 95–100 — a domain
+at 90 draws as Integrated and one at 50 drops to Defined. And the security-operations domain divides
+resolved alerts by total alerts, which on the test tenant meant one unresolved alert produced a
+score of 0. Both are described in `MANUAL-FIELDS.md`; neither is fixed in code yet.
+
 ## Open items
 
+- **Align the renderer with `MANUAL-FIELDS.md`.** Replace the `Round($score/20)` band derivation with
+  the explicit bands, suppress the security-operations domain below 20 alerts, and settle the three
+  competing domain lists (Section 18 names nine, the chart plots eight, the renderer computes eight
+  under other names) on Section 18's list.
+- **`sample-data.json` is schema v1.0 and no longer represents a real collection.** It has 5 tables
+  where a real run has 15, and none of `secureConfiguration`, `findings` or `asrRules` — the richest
+  sources. It renders (see trap 10) but exercises 18 charts / 28 KPIs / 79 rows against a real run's
+  20 / 36 / 159. Refresh it from a scrubbed real collection if it is to be a useful renderer test.
 - **App-only authentication was verified on the test tenant, not yet at a blocked tenant.** `New-MdeApp.ps1 -AppOnly` adds Defender
   *application* permissions, grants them through `appRoleAssignments` and creates a client secret;
   `MDE-Collect.ps1` uses client credentials for the Defender resource when a secret is present. This
   exists because exposure score, recommendations and indicators failed at two tenants with
   `AADSTS50131` — a Conditional Access policy requiring a registered device, which a device code
   sign-in can never satisfy. The plumbing is proven; run it at a blocked tenant to confirm the bypass.
-- The private repo still carries a stale `MDE-Collect.ps1` with none of the collector fixes. Collection
-  is done with the public repo, so it is unused — delete it or sync it.
 - Sections that no API can fill: tenant/portal settings (data region, retention, preview features,
   alert notification rules), onboarding method per device, six-month trends (Advanced Hunting keeps
   30 days), AIR automation rates, Threat Analytics usage, Sentinel connector health. Decide whether
   to keep them in the template or cut them.
-- `MDE-Health-Assessment-SAMPLE.html` was generated from an older template and lacks the newer
-  toolbar and fills. Regenerate if it is going to be shown to anyone.
+- `MDE-Health-Assessment-SAMPLE.html` still shows "Ali Koç, CyberWise" as the consultant on the
+  cover and in the revision history. Decide whether that counts as the branding the working
+  agreement rules out, or whether a named consultant is fine.
 
 ## Working agreements
 

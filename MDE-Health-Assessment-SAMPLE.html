@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>[SAMPLE] Microsoft Defender for Endpoint — Health Check &amp; Security Assessment Report</title>
+<title>Microsoft Defender for Endpoint — Health Check &amp; Security Assessment Report</title>
 <style>
 /* ============================================================
    CyberWise — MDE Health Check Assessment Template
@@ -122,8 +122,11 @@ b,strong{color:var(--navy)}
   color:#A9B2BF;font-style:italic;font-weight:400;
 }
 body.guides .f:empty{
-  outline:1px dashed #C3CBD8;outline-offset:1px;border-radius:2px;min-width:26px;display:inline-block;
+  outline:1px dashed #C3CBD8;outline-offset:1px;border-radius:2px;
+  /* inline-block + uzun yer tutucu metni hucreden tasiyordu; inline kalsin ki sarsin */
+  display:inline;
 }
+.f:empty:before{overflow-wrap:anywhere}
 body.guides .f{background:rgba(27,77,228,.035)}
 .f{min-width:14px}
 
@@ -267,6 +270,24 @@ body.nodata .datahint{display:none}
 .covermeta .r span:first-child{color:var(--muted);text-transform:uppercase;font-size:8pt;letter-spacing:.09em;font-weight:700;padding-top:2px}
 .confbox{margin-top:auto;border-top:2px solid var(--navy);padding-top:9px;font-size:8pt;color:var(--muted)}
 
+/* ---------- Satir ekle / sil (yalnizca ekranda, baskida asla) ---------- */
+.rowctl{display:none}
+@media screen{
+  body.rowtools .rowctl{display:inline-flex;align-items:center;justify-content:center}
+  body.rowtools table.t tbody tr:hover{background:#FFF7E6}
+  .rowctl.del{
+    width:17px;height:17px;margin-left:6px;padding:0;border:1px solid #E3B7B1;
+    border-radius:4px;background:#FDEDEB;color:#B3261E;font-size:11px;line-height:1;
+    cursor:pointer;vertical-align:middle;float:right;
+  }
+  .rowctl.del:hover{background:#B3261E;color:#fff;border-color:#B3261E}
+  .rowctl.addrow{
+    margin:4px 0 12px;padding:3px 10px;border:1px dashed #B9C2D0;border-radius:5px;
+    background:#F7F9FC;color:#41506B;font-size:8.5pt;cursor:pointer;
+  }
+  .rowctl.addrow:hover{border-color:var(--blue);color:var(--blue);background:#EEF2FE}
+}
+
 /* ---------- Yazdırma ---------- */
 @page{size:A4;margin:0}
 @media print{
@@ -286,7 +307,7 @@ body.nodata .datahint{display:none}
 }
 </style>
 </head>
-<body class="nodata">
+<body class="guides">
 
 <div id="bar">
   <b>MDE HEALTH CHECK ASSESSMENT</b>
@@ -295,7 +316,9 @@ body.nodata .datahint{display:none}
   <button onclick="saveHtml()">💾 Save as HTML</button>
   <button class="ghost" onclick="document.body.classList.toggle('guides')">Toggle field outlines</button>
   <button class="ghost" onclick="document.body.classList.toggle('nodata')">Toggle chart data tables</button>
+  <button class="ghost" id="rowToolBtn" onclick="toggleRowTools()" title="Show a delete button on every row and an add-row button under every table">⊞ Add / remove rows</button>
   <span class="cnt" id="draftCount" title="Draft texts awaiting review">0 review pending</span>
+  <button class="ghost" onclick="clearDrafts()" title="Removes every (REVIEW) mark in one go">✓ Approve all</button>
   <button class="ghost" onclick="resetDoc()">↺ Reset</button>
   <span class="sp"></span>
   <span class="hint">Click any text to edit · Enter numbers in the table under each chart · Click a (REVIEW) tag to approve that draft · Changes are saved in this browser</span>
@@ -306,7 +329,7 @@ body.nodata .datahint{display:none}
 <div id="doc">
 
 <!-- ============================ P1 · KAPAK ============================ -->
-<section class="page cover" data-toc="Kapak" data-grp="Giriş">
+<section class="page cover" data-toc="Cover" data-grp="Introduction">
   <div class="body">
     <div class="logo">
       <svg viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-label="Microsoft">
@@ -360,7 +383,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P2 · DOC CONTROL ============================ -->
-<section class="page" data-toc="Doküman Kontrolü & Metodoloji" data-grp="Giriş">
+<section class="page" data-toc="Document Control & Methodology" data-grp="Introduction">
   <div class="body">
     <div class="eyebrow">Section 01</div>
     <h2>Document Control, Scope &amp; Methodology</h2>
@@ -462,7 +485,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P3 · EXEC SUMMARY ============================ -->
-<section class="page" data-toc="Yönetici Özeti" data-grp="Giriş">
+<section class="page" data-toc="Executive Summary" data-grp="Introduction">
   <div class="body">
     <div class="eyebrow">Section 02</div>
     <h2>Executive Summary</h2>
@@ -513,7 +536,7 @@ body.nodata .datahint{display:none}
           <tr><td contenteditable>Security Operations</td><td contenteditable>63</td></tr>
         </tbody>
       </table>
-      <div class="datahint">Bu tabloya 0–100 arası puan girin — grafik otomatik güncellenir.</div>
+      <div class="datahint">Enter a score from 0 to 100 in this table — the chart updates automatically.</div>
     </div>
 
     <div class="cols2 mt12">
@@ -552,7 +575,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P4 · LICENSING & TENANT ============================ -->
-<section class="page" data-toc="Lisanslama & Tenant Yapılandırması" data-grp="Dağıtım">
+<section class="page" data-toc="Licensing & Tenant Configuration" data-grp="Deployment">
   <div class="body">
     <div class="eyebrow">Section 03</div>
     <h2>Licensing &amp; Tenant Configuration</h2>
@@ -631,7 +654,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P5 · ONBOARDING & INVENTORY ============================ -->
-<section class="page" data-toc="Onboarding & Cihaz Envanteri" data-grp="Dağıtım">
+<section class="page" data-toc="Onboarding & Device Inventory" data-grp="Deployment">
   <div class="body">
     <div class="eyebrow">Section 04</div>
     <h2>Onboarding Status &amp; Device Inventory</h2>
@@ -710,7 +733,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P6 · SENSOR HEALTH & CONNECTIVITY ============================ -->
-<section class="page" data-toc="Sensör Sağlığı & Bağlantı" data-grp="Dağıtım">
+<section class="page" data-toc="Sensor Health & Connectivity" data-grp="Deployment">
   <div class="body">
     <div class="eyebrow">Section 05</div>
     <h2>Sensor Health, Connectivity &amp; Agent Hygiene</h2>
@@ -791,7 +814,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P7 · NEXT-GEN PROTECTION ============================ -->
-<section class="page" data-toc="Next-Gen Protection (Antivirus)" data-grp="Koruma">
+<section class="page" data-toc="Next-Gen Protection (Antivirus)" data-grp="Protection">
   <div class="body">
     <div class="eyebrow">Section 06</div>
     <h2>Next-Generation Protection (Microsoft Defender Antivirus)</h2>
@@ -883,7 +906,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P8 · ASR RULES ============================ -->
-<section class="page" data-toc="ASR Kuralları" data-grp="Koruma">
+<section class="page" data-toc="ASR Rules" data-grp="Protection">
   <div class="body">
     <div class="eyebrow">Section 07</div>
     <h2>Attack Surface Reduction — Rule Configuration</h2>
@@ -977,7 +1000,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P9 · OTHER ASR PILLARS ============================ -->
-<section class="page" data-toc="Saldırı Yüzeyi: Ağ, Cihaz, Uygulama" data-grp="Koruma">
+<section class="page" data-toc="Attack Surface: Network, Device, Application" data-grp="Protection">
   <div class="body">
     <div class="eyebrow">Section 08</div>
     <h2>Attack Surface Reduction — Supporting Capabilities</h2>
@@ -1067,7 +1090,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P10 · TVM ============================ -->
-<section class="page" data-toc="Zafiyet Yönetimi (TVM)" data-grp="Maruziyet">
+<section class="page" data-toc="Vulnerability Management (TVM)" data-grp="Exposure">
   <div class="body">
     <div class="eyebrow">Section 09</div>
     <h2>Threat &amp; Vulnerability Management</h2>
@@ -1183,7 +1206,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P11 · BASELINES & CONFIG COMPLIANCE ============================ -->
-<section class="page" data-toc="Güvenlik Baseline & Konfigürasyon Uyumu" data-grp="Maruziyet">
+<section class="page" data-toc="Security Baselines & Configuration Compliance" data-grp="Exposure">
   <div class="body">
     <div class="eyebrow">Section 10</div>
     <h2>Security Baselines &amp; Configuration Compliance</h2>
@@ -1275,7 +1298,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P12 · EDR ============================ -->
-<section class="page" data-toc="EDR & Tespit Yetenekleri" data-grp="Tespit & Yanıt">
+<section class="page" data-toc="EDR & Detection Capabilities" data-grp="Detection & Response">
   <div class="body">
     <div class="eyebrow">Section 11</div>
     <h2>Endpoint Detection &amp; Response</h2>
@@ -1384,7 +1407,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P13 · AIR, HUNTING, CUSTOM DETECTIONS ============================ -->
-<section class="page" data-toc="Otomasyon, Hunting & Özel Tespitler" data-grp="Tespit & Yanıt">
+<section class="page" data-toc="Automation, Hunting & Custom Detections" data-grp="Detection & Response">
   <div class="body">
     <div class="eyebrow">Section 12</div>
     <h2>Automation, Advanced Hunting &amp; Custom Detections</h2>
@@ -1471,7 +1494,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P14 · SOC OPERATIONS ============================ -->
-<section class="page" data-toc="Güvenlik Operasyonları & KPI" data-grp="Tespit & Yanıt">
+<section class="page" data-toc="Security Operations & KPIs" data-grp="Detection & Response">
   <div class="body">
     <div class="eyebrow">Section 13</div>
     <h2>Security Operations, Response Process &amp; KPIs</h2>
@@ -1569,7 +1592,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P15 · RBAC & GOVERNANCE ============================ -->
-<section class="page" data-toc="RBAC, Cihaz Grupları & Yönetişim" data-grp="Yönetişim">
+<section class="page" data-toc="RBAC, Device Groups & Governance" data-grp="Governance">
   <div class="body">
     <div class="eyebrow">Section 14</div>
     <h2>Access Control, Device Groups &amp; Governance</h2>
@@ -1642,7 +1665,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P16 · INTEGRATIONS ============================ -->
-<section class="page" data-toc="Entegrasyonlar & Veri Akışı" data-grp="Yönetişim">
+<section class="page" data-toc="Integrations & Data Flow" data-grp="Governance">
   <div class="body">
     <div class="eyebrow">Section 15</div>
     <h2>Integration Ecosystem &amp; Data Flow</h2>
@@ -1714,7 +1737,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P17 · COMPLIANCE MAPPING ============================ -->
-<section class="page" data-toc="Uyumluluk Eşleştirmesi" data-grp="Yönetişim">
+<section class="page" data-toc="Compliance Mapping" data-grp="Governance">
   <div class="body">
     <div class="eyebrow">Section 16</div>
     <h2>Compliance &amp; Framework Mapping</h2>
@@ -1768,7 +1791,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P18 · FINDINGS REGISTER ============================ -->
-<section class="page" data-toc="Bulgu Kaydı (Findings Register)" data-grp="Bulgular & Yol Haritası">
+<section class="page" data-toc="Findings Register" data-grp="Findings & Roadmap">
   <div class="body">
     <div class="eyebrow">Section 17</div>
     <h2>Findings Register</h2>
@@ -1836,7 +1859,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P19 · FINDING DETAIL ============================ -->
-<section class="page" data-toc="Bulgu Detay Sayfaları" data-grp="Bulgular & Yol Haritası">
+<section class="page" data-toc="Detailed Findings" data-grp="Findings & Roadmap">
   <div class="body">
     <div class="eyebrow">Section 17.1</div>
     <h2>Detailed Findings</h2>
@@ -1901,7 +1924,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P20 · MATURITY & GAP ============================ -->
-<section class="page" data-toc="Olgunluk & Boşluk Analizi" data-grp="Bulgular & Yol Haritası">
+<section class="page" data-toc="Maturity & Gap Analysis" data-grp="Findings & Roadmap">
   <div class="body">
     <div class="eyebrow">Section 18</div>
     <h2>Maturity Model &amp; Gap Analysis</h2>
@@ -1962,7 +1985,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P21 · ROADMAP ============================ -->
-<section class="page" data-toc="Yol Haritası & Öncelik Matrisi" data-grp="Bulgular & Yol Haritası">
+<section class="page" data-toc="Roadmap & Priority Matrix" data-grp="Findings & Roadmap">
   <div class="body">
     <div class="eyebrow">Section 19</div>
     <h2>Remediation Roadmap</h2>
@@ -2050,7 +2073,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P22 · CHECKLIST 1 ============================ -->
-<section class="page" data-toc="Ana Kontrol Listesi (1/2)" data-grp="Ek">
+<section class="page" data-toc="Master Control Checklist (1/2)" data-grp="Appendix">
   <div class="body">
     <div class="eyebrow">Appendix A</div>
     <h2>Master Control Checklist — Deployment &amp; Protection</h2>
@@ -2135,7 +2158,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P23 · CHECKLIST 2 ============================ -->
-<section class="page" data-toc="Ana Kontrol Listesi (2/2)" data-grp="Ek">
+<section class="page" data-toc="Master Control Checklist (2/2)" data-grp="Appendix">
   <div class="body">
     <div class="eyebrow">Appendix A (continued)</div>
     <h2>Master Control Checklist — Detection, Response &amp; Governance</h2>
@@ -2207,7 +2230,7 @@ body.nodata .datahint{display:none}
 </section>
 
 <!-- ============================ P24 · APPENDIX ============================ -->
-<section class="page" data-toc="Ek: KQL, Sözlük & Onay" data-grp="Ek">
+<section class="page" data-toc="Appendix: KQL, Glossary & Sign-off" data-grp="Appendix">
   <div class="body">
     <div class="eyebrow">Appendix B</div>
     <h2>Evidence Queries, Glossary &amp; Sign-off</h2>
@@ -2307,8 +2330,8 @@ const isEmpty=rows=>!rows.some(r=>r.values.some(v=>v!==null&&v!==0));
 function svgWrap(h,inner){return '<svg viewBox="0 0 640 '+h+'" preserveAspectRatio="xMidYMid meet">'+inner+'</svg>';}
 function placeholder(h,msg){
   return svgWrap(h,'<rect x="1" y="1" width="638" height="'+(h-2)+'" fill="#FBFCFE" stroke="#D7DDE7" stroke-dasharray="6 5" rx="6"/>'+
-    '<text x="320" y="'+(h/2-4)+'" text-anchor="middle" font-size="15" fill="#A9B2BF" font-style="italic">'+(msg||'Veri girilmedi — alttaki tabloyu doldurun')+'</text>'+
-    '<text x="320" y="'+(h/2+16)+'" text-anchor="middle" font-size="12" fill="#C3CBD8">No data entered</text>');
+    '<text x="320" y="'+(h/2-4)+'" text-anchor="middle" font-size="15" fill="#A9B2BF" font-style="italic">'+(msg||'No data yet — fill in the table below')+'</text>'+
+    '<text x="320" y="'+(h/2+16)+'" text-anchor="middle" font-size="12" fill="#C3CBD8">The chart draws itself from the table</text>');
 }
 function legend(block,items){
   const l=items.map((it,i)=>'<span><i style="background:'+it.c+'"></i>'+esc(it.t)+'</span>').join('');
@@ -2472,8 +2495,16 @@ function updateDraftCount(){
   const el=document.getElementById('draftCount');
   if(el){const n=document.querySelectorAll('.draft').length;el.textContent=n+' review pending';el.style.opacity=n?1:.45;}
 }
-/* Toplu kaldirma bilerek yok: her taslak tek tek review edilmeli.
-   (REVIEW) rozetine tikla -> yalnizca o taslak onaylanir. Alt+tik da calisir. */
+/* Toplu onay: sayfanin tamamindaki (REVIEW) isaretlerini kaldirir.
+   Tek tek onay icin rozete tikla, ya da metnin herhangi bir yerine Alt+tik. */
+function clearDrafts(){
+  const list=document.querySelectorAll('.draft');
+  if(!list.length){alert('No (REVIEW) marks left.');return;}
+  if(!confirm(list.length+' draft texts are still marked (REVIEW).\n\nApprove all of them and remove the marks?\n\nThe text itself stays; only the yellow marks are removed.')) return;
+  list.forEach(unwrapDraft);
+  updateDraftCount(); save();
+}
+
 document.addEventListener('click',e=>{
   const d=e.target.closest?e.target.closest('.draft'):null;
   if(!d) return;
@@ -2500,16 +2531,116 @@ function buildToc(){
 }
 function toggleToc(){document.getElementById('toc').classList.toggle('on');}
 
+/* ===================== Satir ekle / sil =====================
+   Butonlar #doc icine enjekte edilir; localStorage'a ve "Save as HTML"
+   ciktisina girmemeleri icin docHtml() ve saveHtml() onlari temizler.
+   Aksi halde her acilista cogalirlar. */
+function docHtml(){
+  const c=document.getElementById('doc').cloneNode(true);
+  c.querySelectorAll('.rowctl').forEach(n=>n.remove());
+  return c.innerHTML;
+}
+function isDataRow(tr){
+  return !tr.querySelector('th') && !!tr.querySelector('[contenteditable],select');
+}
+function afterRowChange(tbl){
+  buildSelects();paintSelects();
+  const chart=tbl.closest('.chart');
+  if(chart)renderBlock(chart);
+  if(tbl.querySelector('.val'))renderBars();
+  updateDraftCount();save();
+}
+/* Sablonda cok tablonun ilk hucresi sabit bir <td>Etiket</td> - klonlanınca ayni
+   etiket tekrar eder ve duzenlenemez. Yeni satirda bu hucreler bosaltilip
+   duzenlenebilir yapilir; ID sutunlari (F-07, A1) ise bir sonraki numaraya gecer. */
+function nextId(body,txt){
+  const mA=txt.match(/^([A-H])(\d{1,2})$/), mF=txt.match(/^F-(\d{1,3})$/);
+  if(!mA&&!mF)return null;
+  let max=0,width=mF?mF[1].length:0;
+  [...body.rows].forEach(r=>{
+    const c=r.cells[0];if(!c)return;
+    const t=c.textContent.trim();
+    const m=mA?t.match(new RegExp('^'+mA[1]+'(\\d{1,2})$')):t.match(/^F-(\d{1,3})$/);
+    if(m){const n=parseInt(m[1],10);if(n>max)max=n;}
+  });
+  const n=max+1;
+  return mA?(mA[1]+n):('F-'+String(n).padStart(width,'0'));
+}
+function addRow(tbl){
+  const body=tbl.tBodies[0];if(!body)return;
+  const rows=[...body.rows].filter(isDataRow);
+  if(!rows.length)return;
+  const tr=rows[rows.length-1].cloneNode(true);
+  tr.querySelectorAll('.rowctl').forEach(n=>n.remove());
+  [...tr.cells].forEach((td,i)=>{
+    const sel=td.querySelector('select');
+    if(sel){sel.selectedIndex=0;sel.dataset.v='';
+      [...sel.options].forEach(o=>o.toggleAttribute('selected',false));return;}
+    if(td.hasAttribute('contenteditable')){td.innerHTML='';return;}
+    const inner=td.querySelectorAll('[contenteditable]');
+    if(inner.length){inner.forEach(c=>{c.innerHTML='';});return;}
+    const txt=td.textContent.trim();
+    if(i===0){const nid=nextId(body,txt);if(nid){td.textContent=nid;return;}}
+    td.innerHTML='';
+    td.classList.add('f');
+    td.setAttribute('contenteditable','');
+    if(!td.getAttribute('data-ph'))td.setAttribute('data-ph','\u2013\u2013');
+  });
+  body.appendChild(tr);
+  decorateRow(tr);
+  afterRowChange(tbl);
+}
+function delRow(tr){
+  const tbl=tr.closest('table');
+  const body=tr.closest('tbody');
+  if(body&&[...body.rows].filter(isDataRow).length<=1){
+    tr.querySelectorAll('[contenteditable]').forEach(c=>{c.innerHTML='';});
+    tr.querySelectorAll('select').forEach(sel=>{sel.selectedIndex=0;sel.dataset.v='';});
+    afterRowChange(tbl);return;               /* son satiri silme, temizle */
+  }
+  tr.remove();afterRowChange(tbl);
+}
+function decorateRow(tr){
+  if(!isDataRow(tr)||tr.querySelector('.rowctl.del'))return;
+  const last=tr.cells[tr.cells.length-1];if(!last)return;
+  const b=document.createElement('button');
+  b.className='rowctl del';b.type='button';b.textContent='\u00d7';
+  b.title='Delete this row';
+  b.setAttribute('contenteditable','false');
+  b.onclick=ev=>{ev.stopPropagation();ev.preventDefault();delRow(tr);};
+  last.appendChild(b);
+}
+function initRowTools(){
+  document.querySelectorAll('#doc .rowctl').forEach(n=>n.remove());
+  document.querySelectorAll('#doc table').forEach(tbl=>{
+    const body=tbl.tBodies[0];if(!body)return;
+    const rows=[...body.rows].filter(isDataRow);
+    if(!rows.length)return;
+    rows.forEach(decorateRow);
+    const btn=document.createElement('button');
+    btn.className='rowctl addrow';btn.type='button';btn.textContent='+ Add row';
+    btn.setAttribute('contenteditable','false');
+    btn.onclick=ev=>{ev.preventDefault();addRow(tbl);};
+    tbl.insertAdjacentElement('afterend',btn);
+  });
+}
+function toggleRowTools(){
+  document.body.classList.toggle('rowtools');
+  const on=document.body.classList.contains('rowtools');
+  const b=document.getElementById('rowToolBtn');
+  if(b)b.classList.toggle('on',on);
+}
+
 /* ===================== Kaydet / geri yükle ===================== */
-const KEY='mde-assessment-sample-v1';
+const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-06-review';
+const DOCVER='2026-08-08-en-toc';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
-    try{localStorage.setItem(KEY,JSON.stringify({v:DOCVER,html:document.getElementById('doc').innerHTML}));}catch(e){}
+    try{localStorage.setItem(KEY,JSON.stringify({v:DOCVER,html:docHtml()}));}catch(e){}
   },500);
 }
 function restore(){
@@ -2528,7 +2659,7 @@ function restore(){
   return false;
 }
 function resetDoc(){
-  if(confirm('Tüm girdiğiniz veriler silinip boş şablona dönülecek. Emin misiniz?')){
+  if(confirm('Everything you have entered will be discarded and the blank template restored. Are you sure?')){
     localStorage.removeItem(KEY);location.reload();
   }
 }
@@ -2536,7 +2667,8 @@ function saveHtml(){
   paintSelects();
   document.querySelectorAll('select').forEach(s=>[...s.options].forEach(o=>{o.selected=(o.value===s.value);o.toggleAttribute('selected',o.value===s.value);}));
   const clone=document.documentElement.cloneNode(true);
-  clone.querySelectorAll('#bar,#toc').forEach(n=>n.remove());
+  clone.querySelectorAll('#bar,#toc,.rowctl').forEach(n=>n.remove());
+  clone.querySelectorAll('body').forEach(b=>b.classList.remove('rowtools'));
   const html='<!DOCTYPE html>\n'+clone.outerHTML;
   const blob=new Blob([html],{type:'text/html'});
   const a=document.createElement('a');
@@ -2562,6 +2694,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   restore();
   buildSelects();
   buildToc();renderAll();renderBars();paintSelects();updateDraftCount();
+  initRowTools();
 });
 </script>
 </body>

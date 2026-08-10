@@ -10,9 +10,9 @@ winget install --id Microsoft.PowerShell --source winget
 ```
 
 ```powershell
-# 2) Dosyalar
-git clone https://github.com/MSalikoc/mde-health-check.git
-cd mde-health-check
+# 2) Dosyalar - 3-5. adimlar toplayici (public) repodan calisir
+git clone https://github.com/MSalikoc/mde-data-collector.git
+cd mde-data-collector
 Get-ChildItem *.ps1 | Unblock-File
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 ```
@@ -38,7 +38,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 ```
 
 ```powershell
-# 6) KENDI ORTAMINIZ - JSON'dan raporu uretir ve tarayicida acar
+# 6) KENDI ORTAMINIZ - bu (ozel) repoda, JSON'dan raporu uretir
 .\MDE-Render.ps1 -DataFile .\mde-data-contoso-20260807.json -ClientName "Contoso A.S."
 ```
 

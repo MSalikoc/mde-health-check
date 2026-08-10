@@ -4,16 +4,21 @@ Collects read-only data from an MDE tenant, compares it against best practice, a
 
 Every generated comment is marked **(REVIEW)**. The consultant reads and approves each one individually — when no marks remain, the health check is complete.
 
+The customer-side scripts live in a separate **public** repository,
+[`MSalikoc/mde-data-collector`](https://github.com/MSalikoc/mde-data-collector) — that is the only
+copy of them, so there is never a second, older collector to run by mistake.
+
 | File | Purpose |
 |---|---|
-| `New-MdeApp.ps1` | **Prerequisite step.** Creates the Entra app registration, permissions and admin consent |
-| `MDE-Collect.ps1` | **Runs at the customer.** Collects tenant data → JSON only |
+| `New-MdeApp.ps1` | **Prerequisite step**, in the collector repo. Creates the Entra app registration, permissions and admin consent |
+| `MDE-Collect.ps1` | **Runs at the customer**, in the collector repo. Collects tenant data → JSON only |
 | `MDE-Render.ps1` | **Runs at your end.** Merges the JSON into the template → report |
 | `Test-Parse.ps1` | Syntax check (run this first when troubleshooting) |
 | `MDE-Health-Assessment-Template.html` | Empty 24-section report template |
 | `MDE-Health-Assessment-SAMPLE.html` | Version filled with sample data (fictional Northwind Holding) |
 | `MDE-Health-Assessment-Template.docx` | Word version of the same report |
 | `sample-data.json` | For testing the renderer without a tenant |
+| `MANUAL-FIELDS.md` | **What goes in every blank field, and on what basis** — scoring rubrics, portal lookups |
 | `BASLA-WINDOWS.md` | Short command sequence (Turkish) |
 
 ---
@@ -52,13 +57,17 @@ $PSVersionTable.PSVersion
 
 ## Step 1 · Get the files
 
+Steps 2–4 run at the customer and use the **collector** repository:
+
 ```powershell
-git clone https://github.com/MSalikoc/mde-health-check.git
+git clone https://github.com/MSalikoc/mde-data-collector.git
 ```
 
 ```powershell
-cd mde-health-check
+cd mde-data-collector
 ```
+
+Step 5 runs at your end and uses this repository instead — clone it on your own machine only.
 
 Windows blocks `.ps1` files downloaded from the internet (Mark-of-the-Web):
 
@@ -80,7 +89,7 @@ Before running anything, confirm the files arrived intact:
 .\Test-Parse.ps1
 ```
 
-You should see `OK` for all five scripts. If it reports `HATA`, it prints the line and column — share that output.
+It parses every `.ps1` in the folder. If it reports `HATA`, it prints the line and column — share that output.
 
 ## Step 3 · Entra app registration (one time)
 
@@ -128,6 +137,8 @@ Take the JSON file with you. It is the only artefact needed for the report.
 
 ## Step 5 · Produce the report (your environment)
 
+Switch to a clone of **this** repository and bring the JSON file with you:
+
 ```powershell
 .\MDE-Render.ps1 -DataFile .\mde-data-contoso-20260807.json -ClientName "Contoso A.S."
 ```
@@ -152,6 +163,8 @@ The JSON is plain text and editable — correct anything the collector got wrong
 
 ### MDE-Collect.ps1
 
+Lives in the collector repo; that repo's README is the authoritative list.
+
 | Parameter | Description |
 |---|---|
 | `-TenantId` | Tenant GUID or `xxx.onmicrosoft.com` (required) |
@@ -170,6 +183,7 @@ The JSON is plain text and editable — correct anything the collector got wrong
 | `-ClientName "Contoso A.S."` | Client name on the cover (tenant name when omitted) |
 | `-Template <path>` | Template file (auto-detected when omitted) |
 | `-HideDataTables` | Start with chart data tables hidden (cleaner for delivery) |
+| `-Logo template\|microsoft\|none` | Cover logo (default `template`) |
 | `-OutFile` | Report file name |
 
 ---
