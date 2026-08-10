@@ -57,6 +57,7 @@ body{
 }
 #bar button:hover{background:var(--blue3)}
 #bar button.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45)}
+#bar button.ghost.on{background:#fff;color:var(--navy);border-color:#fff;font-weight:700}
 #bar .sp{flex:1}
 #bar .hint{opacity:.75;font-size:11px}
 #toc{
@@ -321,7 +322,7 @@ body.nodata .datahint{display:none}
   <button class="ghost" onclick="clearDrafts()" title="Removes every (REVIEW) mark in one go">✓ Approve all</button>
   <button class="ghost" onclick="resetDoc()">↺ Reset</button>
   <span class="sp"></span>
-  <span class="hint">Click any text to edit · Enter numbers in the table under each chart · Click a (REVIEW) tag to approve that draft · Changes are saved in this browser</span>
+  <span class="hint">Click any text to edit · Enter numbers in the table under each chart · Click a (REVIEW) tag to approve that draft · Use <b>Add / remove rows</b> to delete an empty row or add one · Changes are saved in this browser</span>
 </div>
 
 <nav id="toc"></nav>
@@ -2635,7 +2636,7 @@ function toggleRowTools(){
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-08-en-toc';
+const DOCVER='2026-08-10-rowtools';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
