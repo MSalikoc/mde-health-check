@@ -309,7 +309,7 @@ body.nodata .datahint{display:none}
 }
 </style>
 </head>
-<body class="guides">
+<body class="guides rowtools">
 
 <div id="bar">
   <b>MDE HEALTH CHECK ASSESSMENT</b>
@@ -318,12 +318,12 @@ body.nodata .datahint{display:none}
   <button onclick="saveHtml()">💾 Save as HTML</button>
   <button class="ghost" onclick="document.body.classList.toggle('guides')">Toggle field outlines</button>
   <button class="ghost" onclick="document.body.classList.toggle('nodata')">Toggle chart data tables</button>
-  <button class="ghost" id="rowToolBtn" onclick="toggleRowTools()" title="Show a delete button on every row and an add-row button under every table">⊞ Add / remove rows</button>
+  <button class="ghost" id="rowToolBtn" onclick="toggleRowTools()" title="Show or hide the per-row delete buttons and the add-row buttons (never printed)">⊞ Row editing</button>
   <span class="cnt" id="draftCount" title="Draft texts awaiting review">0 review pending</span>
   <button class="ghost" onclick="clearDrafts()" title="Removes every (REVIEW) mark in one go">✓ Approve all</button>
   <button class="ghost" onclick="resetDoc()">↺ Reset</button>
   <span class="sp"></span>
-  <span class="hint">Click any text to edit · Enter numbers in the table under each chart · Click a (REVIEW) tag to approve that draft · Use <b>Add / remove rows</b> to delete an empty row or add one · Changes are saved in this browser</span>
+  <span class="hint">Click any text to edit · Enter numbers in the table under each chart · Click a (REVIEW) tag to approve that draft · Delete an empty row with <b>&#215;</b> or add one with <b>+ Add row</b>; hide these with <b>Row editing</b> · Changes are saved in this browser</span>
 </div>
 
 <nav id="toc"></nav>
@@ -2613,6 +2613,12 @@ function decorateRow(tr){
   last.appendChild(b);
 }
 function initRowTools(){
+  try{ buildRowTools(); }
+  catch(err){ console.error('Row tools failed to initialise:',err); }
+  const b=document.getElementById('rowToolBtn');
+  if(b)b.classList.toggle('on',document.body.classList.contains('rowtools'));
+}
+function buildRowTools(){
   document.querySelectorAll('#doc .rowctl').forEach(n=>n.remove());
   document.querySelectorAll('#doc table').forEach(tbl=>{
     const body=tbl.tBodies[0];if(!body)return;
@@ -2637,7 +2643,7 @@ function toggleRowTools(){
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-10-rowtools';
+const DOCVER='2026-08-10-rowtools-on';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
