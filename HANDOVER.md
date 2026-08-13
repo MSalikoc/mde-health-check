@@ -126,6 +126,31 @@ at 90 draws as Integrated and one at 50 drops to Defined. And the security-opera
 resolved alerts by total alerts, which on the test tenant meant one unresolved alert produced a
 score of 0. Both are described in `MANUAL-FIELDS.md`; neither is fixed in code yet.
 
+**2026-08-13** — **app-only authentication is proven at a tenant that actually blocks.** A customer
+tenant enforcing device-based Conditional Access failed exposure score, configuration score,
+recommendations and indicators together with `AADSTS50131`. After `New-MdeApp.ps1 -AppOnly`, all
+four collected and only scope notes remained. The open item this handover carried since 2026-08-08
+is closed: client credentials are the answer, because an application identity has no device for the
+policy to evaluate. Worth knowing for the next engagement: the customer believed they were excluded
+from the Conditional Access policy and were still blocked — being excluded from one policy proves
+nothing when another scopes the Defender application. Only the Entra sign-in logs, searched by the
+correlation ID in the error, say which policy applied.
+
+Three collector fixes came out of it. The error now names the cause and the remedy instead of
+printing a raw `AADSTS50131` four times. Optional hunting tables fall back to matching the message
+text when the HTTP status cannot be read off the exception — the status was not resolving, so the
+licence-dependent firmware table was reporting as a hard failure again despite the earlier fix.
+And `Try-Api` now distinguishes a failed call from one that succeeded with no rows, which PowerShell
+had been collapsing into the same `$null`: recommendations returning empty usually means Defender
+RBAC has not scoped the collecting identity to any device group, and a report that states "no
+findings" on that basis is worse than one that reports an error.
+
+The collector README now puts `-AppOnly` in step 2 rather than in a remedy section, and documents
+the application permissions honestly — the list had omitted `SecurityConfiguration.Read.All` and
+`Ti.ReadWrite.All`. The second is read-write and appears on the customer's consent screen; Defender
+publishes no read-only application role for indicators, so a security team meets it for the first
+time while approving a tool described as read-only.
+
 ## Open items
 
 - **Align the renderer with `MANUAL-FIELDS.md`.** Replace the `Round($score/20)` band derivation with
@@ -136,12 +161,10 @@ score of 0. Both are described in `MANUAL-FIELDS.md`; neither is fixed in code y
   where a real run has 15, and none of `secureConfiguration`, `findings` or `asrRules` — the richest
   sources. It renders (see trap 10) but exercises 18 charts / 28 KPIs / 79 rows against a real run's
   20 / 36 / 159. Refresh it from a scrubbed real collection if it is to be a useful renderer test.
-- **App-only authentication was verified on the test tenant, not yet at a blocked tenant.** `New-MdeApp.ps1 -AppOnly` adds Defender
-  *application* permissions, grants them through `appRoleAssignments` and creates a client secret;
-  `MDE-Collect.ps1` uses client credentials for the Defender resource when a secret is present. This
-  exists because exposure score, recommendations and indicators failed at two tenants with
-  `AADSTS50131` — a Conditional Access policy requiring a registered device, which a device code
-  sign-in can never satisfy. The plumbing is proven; run it at a blocked tenant to confirm the bypass.
+- **Decide whether `Ti.ReadWrite.All` stays in the app-only role set.** It is the only Defender
+  application role that reads indicators — there is no read-only equivalent — so the choice is
+  between asking a customer to approve a write permission on a read-only tool, or dropping the role
+  and leaving the indicator section empty. Documented in the collector README either way.
 - Sections that no API can fill: tenant/portal settings (data region, retention, preview features,
   alert notification rules), onboarding method per device, six-month trends (Advanced Hunting keeps
   30 days), AIR automation rates, Threat Analytics usage, Sentinel connector health. Decide whether
