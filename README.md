@@ -220,6 +220,22 @@ The scripts make no write calls. Any section that fails is skipped and recorded 
 | **Narrative text** | Collected data + best practice (39 fields) |
 | **Control commentary** | Best-practice library (178 keys, ~183 rows) |
 
+### Collector JSON keys expected by the renderer (main sections)
+
+| Report section | Collector JSON key(s) |
+|---|---|
+| Exposure score | `kpi["Exposure Score"]` (alias: `kpi["Exposure score"]`) |
+| Security recommendations | `tables.secureScoreActions` |
+| Indicators / threat intelligence | `tables.indicators` |
+| Secure configuration & baseline compliance | `tables.secureConfiguration` |
+| ASR rule state | `tables.asrRules`, `tables.asrEvents` |
+| AV exclusion hygiene | `tables.avExclusions` |
+| Vulnerability posture | `kpi["Total vulnerabilities"]`, `kpi["Critical CVEs"]`, `kpi["Software products"]`, `tables.topVulnerableSoftware` |
+| Privileged roles / governance | `tables.privilegedRoles`, `tables.conditionalAccess`, `meta.pimEligibleAssignments` |
+
+If these keys are missing or empty, the renderer now writes explicit fallback text (for example
+`Not available`) and marks the row as `N/A` instead of leaving sections visually blank.
+
 # What stays manual
 
 Verifying the executive summary, adapting the risk statement to the client, deciding finding severity, effort/owner/dates, maturity scoring, the priority matrix, revision history and contact details.
