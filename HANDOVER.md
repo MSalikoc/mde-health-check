@@ -151,6 +151,32 @@ the application permissions honestly — the list had omitted `SecurityConfigura
 publishes no read-only application role for indicators, so a security team meets it for the first
 time while approving a tool described as read-only.
 
+**2026-08-13 (later)** — three gaps closed and a questionnaire added.
+
+Host firewall, BitLocker and the misconfiguration table were blank while the controls sat in
+`secureConfiguration`. The misconfiguration table had required a control to apply to 50 devices; on a
+nine-device tenant nothing qualified and it rendered empty. The floor is now relative to the estate.
+Rows are only filled where a control genuinely covers them - Credential Guard is still blank rather
+than filled from "disable local storage of passwords", which would have been trap 9 in a new costume.
+
+Secure score impact was reading the current score, which in that list is near zero by definition; the
+number wanted is the ceiling, which lives on the control profiles endpoint.
+
+A 677-rule custom detection inventory cannot be shown five arbitrary rows at a time. The rows now
+lead with disabled rules and then severity, and the narrative carries the real scale.
+
+`New-Survey.ps1` and `survey-questions.psd1` produce a customer questionnaire for the fields no API
+exposes. Questions are written by hand - asking "Data storage region" as though it were a question
+tells the customer nothing - with a full sentence, a note explaining what is meant, and a closed
+answer set. The generator validates every question against the template and reports both questions
+whose target row has gone and blanks that have no question yet, so the two cannot drift apart. The
+renderer takes `-SurveyFile`; collected data always wins, and answers arrive labelled
+**Self-reported**, because a customer assertion and a measurement are not the same claim.
+
+Two traps paid for while building it: an apostrophe inside a single-quoted string in a `.psd1` closes
+the string (the cousin of trap 7), and a regex evaluator that returns the captured group rather than
+the whole match silently deletes the `<tr>` tags around every row it touches.
+
 ## Open items
 
 - **Align the renderer with `MANUAL-FIELDS.md`.** Replace the `Round($score/20)` band derivation with

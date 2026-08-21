@@ -19,6 +19,8 @@ copy of them, so there is never a second, older collector to run by mistake.
 | `MDE-Health-Assessment-Template.docx` | Word version of the same report |
 | `sample-data.json` | For testing the renderer without a tenant |
 | `MANUAL-FIELDS.md` | **What goes in every blank field, and on what basis** — scoring rubrics, portal lookups |
+| `New-Survey.ps1` | Builds the customer questionnaire for the fields no API exposes |
+| `survey-questions.psd1` | The questions themselves — edit here, not in the generator |
 | `BASLA-WINDOWS.md` | Short command sequence (Turkish) |
 
 ---
@@ -135,6 +137,29 @@ Add `-RawDumpPath .\raw` only while troubleshooting: it writes the raw output of
 
 Take the JSON file with you. It is the only artefact needed for the report.
 
+## Step 4b · Questionnaire (optional, same visit)
+
+Some fields have no API behind them: tenant and portal settings, the advanced-feature switches,
+device control, application control, and the practice questions around hunting and vulnerability
+management. Rather than going back to the customer after the render, hand them the questionnaire
+during the collection visit:
+
+```powershell
+.\New-Survey.ps1 -ClientName "Contoso A.S."
+```
+
+That writes `mde-survey-form.html` — one self-contained file, no install, works offline. The customer
+answers what they know, presses **Download answers** and sends back a small JSON file.
+
+Every question is written out in full with a note explaining what is being asked, and the answers are
+a closed set rather than free text, so they merge cleanly and mean the same thing every engagement.
+"Not sure" is always an option and is more useful than a guess.
+
+The generator checks each question against the template and refuses to invent: a question whose
+target row no longer exists is reported, and so is the number of blank fields that have no question
+yet (`-ShowUnasked` lists them). The questions live in `survey-questions.psd1`; add to that file, not
+to the generator.
+
 ## Step 5 · Produce the report (your environment)
 
 Switch to a clone of **this** repository and bring the JSON file with you:
@@ -142,6 +167,15 @@ Switch to a clone of **this** repository and bring the JSON file with you:
 ```powershell
 .\MDE-Render.ps1 -DataFile .\mde-data-contoso-20260807.json -ClientName "Contoso A.S."
 ```
+
+With questionnaire answers:
+
+```powershell
+.\MDE-Render.ps1 -DataFile .\mde-data-contoso-20260807.json -SurveyFile .\mde-survey-contoso-20260813.json -ClientName "Contoso A.S."
+```
+
+Collected data always wins: an answer only fills a cell nothing else could, and arrives labelled
+**Self-reported** so a customer assertion is never mistaken for a measurement.
 
 The template is picked up automatically from the script folder; use `-Template` only to point at a different one. The report is written next to the JSON and opened in your browser.
 
@@ -219,22 +253,6 @@ The scripts make no write calls. Any section that fails is skipped and recorded 
 | **Draft findings** | Threshold rules (coverage, tamper, ASR, CVEs, exposure, CA, GA count) |
 | **Narrative text** | Collected data + best practice (39 fields) |
 | **Control commentary** | Best-practice library (178 keys, ~183 rows) |
-
-### Collector JSON keys expected by the renderer (main sections)
-
-| Report section | Collector JSON key(s) |
-|---|---|
-| Exposure score | `kpi["Exposure Score"]` (alias: `kpi["Exposure score"]`) |
-| Security recommendations | `tables.secureScoreActions` |
-| Indicators / threat intelligence | `tables.indicators` |
-| Secure configuration & baseline compliance | `tables.secureConfiguration` |
-| ASR rule state | `tables.asrRules`, `tables.asrEvents` |
-| AV exclusion hygiene | `tables.avExclusions` |
-| Vulnerability posture | `kpi["Total vulnerabilities"]`, `kpi["Critical CVEs"]`, `kpi["Software products"]`, `tables.topVulnerableSoftware` |
-| Privileged roles / governance | `tables.privilegedRoles`, `tables.conditionalAccess`, `meta.pimEligibleAssignments` |
-
-If these keys are missing or empty, the renderer now writes explicit fallback text (for example
-`Not available`) and marks the row as `N/A` instead of leaving sections visually blank.
 
 # What stays manual
 

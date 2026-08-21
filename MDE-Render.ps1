@@ -22,6 +22,10 @@ param(
     [string]$ClientName,          # boşsa JSON'daki tenant adı kullanılır
     [switch]$HideDataTables,      # grafik veri tablolarını gizli başlat
 
+    # New-Survey.ps1 formundan dönen cevaplar. Yalnızca hâlâ boş olan hücreleri
+    # doldurur - toplanan veri her zaman kazanır - ve "Self-reported" diye işaretler.
+    [string]$SurveyFile,
+
     # Kapak logosu: template = şablondaki logoyu koru, microsoft = Microsoft
     # dört-kare logosu, none = logoyu kaldır
     [ValidateSet('template', 'microsoft', 'none')][string]$Logo = 'template'
@@ -1973,6 +1977,112 @@ $html = [regex]::Replace($html, '(?s)(</div>\s*<script>)', {
     param($m)
     $script:noteHtml + $m.Groups[1].Value
 }, 1)
+
+# ============================================================================
+#  ANKET CEVAPLARI (New-Survey.ps1 -> musteri -> -SurveyFile)
+#  En sonda calisir: yalnizca hicbir veri kaynaginin dolduramadigi hucreleri
+#  doldurur. Toplanan veri HER ZAMAN kazanir - bir musteri beyani, olculmus bir
+#  degerin uzerine yazamaz. Cevaplar "Self-reported" olarak isaretlenir, cunku
+#  beyan ile gozlem ayni sey degildir.
+# ============================================================================
+if ($SurveyFile) {
+    if (-not (Test-Path $SurveyFile)) { throw "Anket dosyasi bulunamadi: $SurveyFile" }
+    $survey = Get-Content $SurveyFile -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($survey.schema -ne 'mde-survey/1') {
+        Write-Warning "Anket surumu taninmadi ($($survey.schema)); yine de denenecek."
+    }
+    $ans = @{}
+    foreach ($p in $survey.answers.PSObject.Properties) { $ans[$p.Name] = $p.Value }
+
+    # Cevap dosyasi soru kimligi tasir; o kimligin hangi satiri dolduracagini
+    # soru bankasi bilir. Banka olmadan birlestirme yapilamaz.
+    $qFile = @((Join-Path $PSScriptRoot 'survey-questions.psd1'),
+               (Join-Path (Split-Path $PSScriptRoot -Parent) 'survey-questions.psd1')) |
+             Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $qFile) { throw 'survey-questions.psd1 bulunamadi - anket cevaplari eslenemez.' }
+    $qBank = @((Import-PowerShellDataFile -Path $qFile).Questions)
+
+    # New-Survey.ps1 icindeki Norm ile BIREBIR AYNI kalmali
+    function Norm {
+        param([string]$s)
+        $t = ([System.Net.WebUtility]::HtmlDecode(($s -replace '<[^>]+>', ''))).Trim() -replace '&', ' and '
+        $t = $t -replace '[^\w\s]', ' ' -replace '\s+', ' '
+        return $t.Trim().ToLower()
+    }
+
+    # hedef yolu -> cevap
+    $byTarget = @{}
+    foreach ($q in $qBank) {
+        if (-not $ans.ContainsKey($q.id)) { continue }
+        $byTarget["$(Norm $q.target.section)::$(Norm $q.target.table)::$(Norm $q.target.row)"] = $ans[$q.id]
+    }
+    $ans = $byTarget
+
+    $script:svSection = ''; $script:svH3 = ''
+    $script:svFilled = 0; $script:svConflict = 0; $script:svUnused = @{}
+    foreach ($k in $ans.Keys) { $script:svUnused[$k] = $true }
+
+    # Tek gecis: bolum basligi / h3 / satir - hangisi eslesirse durumu guncelle veya doldur
+    $rxWalk = [regex]'(?s)<section class="page[^"]*"[^>]*data-toc="([^"]*)"|<h3[^>]*>(.*?)</h3>|<tr>((?:(?!</tr>).)*)</tr>'
+    $html = $rxWalk.Replace($html, {
+        param($m)
+        if ($m.Groups[1].Success) { $script:svSection = Norm $m.Groups[1].Value; return $m.Value }
+        if ($m.Groups[2].Success) { $script:svH3 = Norm $m.Groups[2].Value; return $m.Value }
+
+        $row = $m.Groups[3].Value
+        $cells = [regex]::Matches($row, '(?s)<td[^>]*>(.*?)</td>')
+        if ($cells.Count -lt 2) { return $m.Value }
+        $label = [System.Net.WebUtility]::HtmlDecode(($cells[0].Groups[1].Value -replace '<[^>]+>', '')).Trim()
+        if (-not $label) { return $m.Value }
+
+        $id = "$($script:svSection)::$($script:svH3)::$(Norm $label)"
+        if (-not $ans.ContainsKey($id)) { return $m.Value }
+        $a = $ans[$id]
+        $script:svUnused.Remove($id) | Out-Null
+
+        $new = $row
+        # Ilk BOS duzenlenebilir hucre - dolu olan hucreye asla dokunma
+        $rxEmpty = [regex]'<td([^>]*data-ph="[^"]*")></td>'
+        if ($a.observed -and $rxEmpty.IsMatch($new)) {
+            $script:svText = "Self-reported: $($a.observed)"
+            $new = $rxEmpty.Replace($new, {
+                param($cm)
+                "<td$($cm.Groups[1].Value)><span class=`"draft`">$(Esc $script:svText)</span></td>"
+            }, 1)
+            $script:svFilled++
+            $script:draftCount++
+        }
+        elseif ($a.observed) { $script:svConflict++ }
+
+        # Durum hucresi iki bicimde olabilir: bos <td class="sel"></td> (istemcide
+        # doldurulur) ya da sablona gomulu hazir <select>. Ikisini de ele al.
+        if ($a.status) {
+            if ($new -match '<td class="sel"></td>') {
+                $new = $new -replace '<td class="sel"></td>', ('<td class="sel">' + (New-Select 'st' $ST_OPTS $a.status) + '</td>')
+            }
+            elseif ($new -notmatch 'selected') {
+                $script:svStatus = $a.status
+                $new = [regex]::Replace($new, '<option value="([^"]*)">', {
+                    param($om)
+                    if ($om.Groups[1].Value -eq $script:svStatus) { "<option value=`"$($om.Groups[1].Value)`" selected>" }
+                    else { $om.Value }
+                })
+            }
+        }
+        # DIKKAT: eslesme <tr>...</tr>'nin TAMAMI, gruplanan ise yalnizca ici.
+        # Sadece $new dondurursek satir etiketleri silinir ve tablo bozulur.
+        return "<tr>$new</tr>"
+    })
+
+    Write-Host ''
+    Write-Host "  Anket: $($script:svFilled) alan dolduruldu" -ForegroundColor Green
+    if ($script:svConflict) {
+        Write-Host "         $($script:svConflict) cevap kullanilmadi - o hucreleri toplanan veri zaten doldurmustu" -ForegroundColor DarkGray
+    }
+    if ($script:svUnused.Count) {
+        Write-Host "         $($script:svUnused.Count) cevap hicbir satira eslenmedi - sablon degismis olabilir" -ForegroundColor Yellow
+    }
+}
 
 # ------------------------------------------------------------ KAPAK LOGO --
 if ($Logo -ne 'template') {
