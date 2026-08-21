@@ -277,10 +277,14 @@ body.nodata .datahint{display:none}
 @media screen{
   body.rowtools .rowctl{display:inline-flex;align-items:center;justify-content:center}
   body.rowtools table.t tbody tr:hover{background:#FFF7E6}
+  /* Dugme metin akisinin DISINDA durmali: float:right ile hucrenin icinde akiyordu ve
+     son sutuna yazi girilemiyordu. Mutlak konum + hucrede ayrilmis sag bosluk. */
+  body.rowtools table tbody tr > td:last-child{position:relative;padding-right:24px}
   .rowctl.del{
-    width:17px;height:17px;margin-left:6px;padding:0;border:1px solid #E3B7B1;
+    position:absolute;top:4px;right:3px;
+    width:17px;height:17px;padding:0;border:1px solid #E3B7B1;
     border-radius:4px;background:#FDEDEB;color:#B3261E;font-size:11px;line-height:1;
-    cursor:pointer;vertical-align:middle;float:right;
+    cursor:pointer;user-select:none;
   }
   .rowctl.del:hover{background:#B3261E;color:#fff;border-color:#B3261E}
   .rowctl.addrow{
@@ -2344,8 +2348,8 @@ const isEmpty=rows=>!rows.some(r=>r.values.some(v=>v!==null&&v!==0));
 function svgWrap(h,inner){return '<svg viewBox="0 0 640 '+h+'" preserveAspectRatio="xMidYMid meet">'+inner+'</svg>';}
 function placeholder(h,msg){
   return svgWrap(h,'<rect x="1" y="1" width="638" height="'+(h-2)+'" fill="#FBFCFE" stroke="#D7DDE7" stroke-dasharray="6 5" rx="6"/>'+
-    '<text x="320" y="'+(h/2-4)+'" text-anchor="middle" font-size="15" fill="#A9B2BF" font-style="italic">'+(msg||'Collector data not available for this chart')+'</text>'+
-    '<text x="320" y="'+(h/2+16)+'" text-anchor="middle" font-size="12" fill="#C3CBD8">Verify permissions/licensing or enter values manually in the table</text>');
+    '<text x="320" y="'+(h/2-4)+'" text-anchor="middle" font-size="15" fill="#A9B2BF" font-style="italic">'+(msg||'No data yet — fill in the table below')+'</text>'+
+    '<text x="320" y="'+(h/2+16)+'" text-anchor="middle" font-size="12" fill="#C3CBD8">The chart draws itself from the table</text>');
 }
 function legend(block,items){
   const l=items.map((it,i)=>'<span><i style="background:'+it.c+'"></i>'+esc(it.t)+'</span>').join('');
@@ -2655,7 +2659,7 @@ function toggleRowTools(){
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-10-rowtools-on';
+const DOCVER='2026-08-13-delbtn';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
