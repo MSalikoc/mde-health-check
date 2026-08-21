@@ -25,6 +25,26 @@ copy of them, so there is never a second, older collector to run by mistake.
 
 ---
 
+## Which file goes where
+
+Three artefacts move between two machines, and mixing them up is the usual cause of a half-empty
+report.
+
+| Artefact | Produced by | Where | Comes back as |
+|---|---|---|---|
+| `mde-survey-form.html` | `New-Survey.ps1` on **your** machine | handed to the customer | — |
+| `mde-data-<tenant>-<date>.json` | `MDE-Collect.ps1` at the **customer** | customer environment | the collected data |
+| `mde-survey-<tenant>-<date>.json` | the customer pressing **Download answers** | customer environment | the questionnaire answers |
+
+Both JSON files return to you and both are inputs to the same render. The questionnaire is optional:
+leave `-SurveyFile` off and the report is produced exactly as before, with those fields blank for you
+to fill by hand.
+
+**Generate the questionnaire before the visit.** It comes from the template, needs no tenant access,
+and handing it over during the collection session is what removes the second meeting.
+
+---
+
 # Step by step (PowerShell)
 
 ## Step 0 · Prerequisites
@@ -148,8 +168,26 @@ during the collection visit:
 .\New-Survey.ps1 -ClientName "Contoso A.S."
 ```
 
-That writes `mde-survey-form.html` — one self-contained file, no install, works offline. The customer
-answers what they know, presses **Download answers** and sends back a small JSON file.
+That writes `mde-survey-form.html`: one self-contained file, no install, works offline, nothing
+transmitted anywhere.
+
+**The customer** opens it in any browser, answers what they know, and presses **Download answers**,
+which saves `mde-survey-<tenant>-<date>.json` on their machine. They send that back alongside the
+collected JSON.
+
+26 questions across 9 groups today, in the same order as the report:
+
+| Group | Asks about |
+|---|---|
+| Tenant & Portal Configuration | storage region, retention, preview features, alert notifications |
+| Connectivity Configuration | proxy method, TLS inspection bypass |
+| Application & Exploit Protection | WDAC/AppLocker, exploit protection, Credential Guard, HVCI |
+| Device Control & Peripheral Security | USB, printers, device installation |
+| Vulnerability Management Capability | remediation SLA, whether recommendations reach the patching team |
+| Advanced Hunting & Custom Detections | hunting cadence, rule review, KQL capability |
+| Threat Analytics & Threat Intelligence | whether reports are acted on, external TI feeds |
+| Advanced Features & Integration Switches | XDR portal, MDI, MDO, SIEM forwarding, third-party AV |
+| Telemetry & Data Management | daily ingestion volume |
 
 Every question is written out in full with a note explaining what is being asked, and the answers are
 a closed set rather than free text, so they merge cleanly and mean the same thing every engagement.
@@ -174,8 +212,24 @@ With questionnaire answers:
 .\MDE-Render.ps1 -DataFile .\mde-data-contoso-20260807.json -SurveyFile .\mde-survey-contoso-20260813.json -ClientName "Contoso A.S."
 ```
 
-Collected data always wins: an answer only fills a cell nothing else could, and arrives labelled
-**Self-reported** so a customer assertion is never mistaken for a measurement.
+### How the two are merged
+
+The questionnaire runs **last**, after every other source has had its turn, and obeys three rules:
+
+1. **Collected data always wins.** An answer only ever fills a cell nothing else could. Where the
+   customer answered something the collection already measured, the answer is discarded.
+2. **Answers are labelled `Self-reported:`** in the cell. A customer assertion and a measurement are
+   different claims and the report should not blur them. They carry the usual **(REVIEW)** mark too,
+   so you still approve each one.
+3. **An answer matching no row is reported, not ignored** — that means the template moved and the
+   question bank needs updating.
+
+The console prints all three counts:
+
+```
+Anket: 26 alan dolduruldu
+       4 cevap kullanilmadi - o hucreleri toplanan veri zaten doldurmustu
+```
 
 The template is picked up automatically from the script folder; use `-Template` only to point at a different one. The report is written next to the JSON and opened in your browser.
 

@@ -105,8 +105,20 @@ foreach ($s in $map.Keys) { foreach ($t in $map[$s].Keys) { foreach ($r in $map[
 } } }
 
 # --------------------------------------------------- FORM ----------------
+# Gruplar raporun sirasini izlesin - Group-Object alfabetik siralar ve "Tenant &
+# Portal Configuration" anketin dibine duserdi. Sablondaki konumuna gore siralıyoruz.
+$order = @{}
+foreach ($q in $qs) {
+    $key = "$(Norm $q.target.section)::$(Norm $q.target.table)"
+    if ($order.ContainsKey($key)) { continue }
+    $rx = [regex]("(?s)data-toc=`"[^`"]*`"(?:(?!<section class=`"page).)*?<h3[^>]*>(?:(?!</h3>).)*?" +
+                  [regex]::Escape(($q.target.table -replace '&', '&amp;')))
+    $m = $rx.Match($html)
+    $order[$key] = if ($m.Success) { $m.Index } else { [int]::MaxValue }
+}
 $groups = $qs | Where-Object { $asked.ContainsKey("$(Norm $_.target.section)::$(Norm $_.target.table)::$(Norm $_.target.row)") } |
-          Group-Object { $_.target.table }
+          Group-Object { $_.target.table } |
+          Sort-Object { $order["$(Norm ($_.Group[0].target.section))::$(Norm ($_.Group[0].target.table))"] }
 
 $sb = [System.Text.StringBuilder]::new()
 foreach ($g in $groups) {
