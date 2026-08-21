@@ -853,7 +853,14 @@ if ($d.tables.avExclusions) {
 
 # ------------------------------------------- OZEL TESPIT KURALLARI -------
 if ($d.tables.customDetections -and @($d.tables.customDetections).Count -gt 0) {
-    $rules = Rows $d.tables.customDetections
+    # Tabloda 5 satir var, tenant'ta 677 kural olabiliyor. API sirasindan ilk 5'i
+    # basmak envanteri 5 kuraldan ibaret gosterir. Dikkat isteyenleri one aliyoruz:
+    # once devre disi olanlar (kendi basina bir yonetisim bulgusu), sonra severity.
+    $sevRank = @{ 'critical' = 0; 'high' = 1; 'medium' = 2; 'low' = 3 }
+    $rules = @(Rows $d.tables.customDetections | Sort-Object `
+        @{ Expression = { if ($_.enabled -eq $false) { 0 } else { 1 } } },
+        @{ Expression = { $r = "$($_.severity)".ToLower(); if ($sevRank.ContainsKey($r)) { $sevRank[$r] } else { 4 } } },
+        @{ Expression = { "$($_.name)" } })
     $script:cdIdx = 0
     $rx = [regex]'(?s)(<h3>Custom Detection Rule Inventory</h3>\s*<table class="t compact">.*?<tbody>)(.*?)(</tbody>)'
     $script:html = $rx.Replace($script:html, {
@@ -1008,7 +1015,21 @@ $drafts['[Describe the automation level applied per device group'] =
 "Automated investigation and response settings are configured per device group and could not be read through the API. Confirm the automation level for each group with the endpoint team: groups set to 'no automation' require an analyst for every remediation, and semi-automatic groups accumulate pending approvals that erode the benefit of automation."
 
 $drafts['[Comment on the balance between automation'] =
-"$(if ($d.tables.customDetections -and @($d.tables.customDetections).Count -gt 0) { "$(@($d.tables.customDetections).Count) custom detection rules are in place." } else { 'No custom detection rules are defined, so the environment relies entirely on Microsoft-supplied detections.' }) Threat hunting output should feed back into custom detections; without a scheduled hunting cadence this loop rarely forms."
+"$(
+if ($d.tables.customDetections -and @($d.tables.customDetections).Count -gt 0) {
+    $cdAll  = Rows $d.tables.customDetections
+    $cdOff  = @($cdAll | Where-Object { $_.enabled -eq $false })
+    $cdSev  = @($cdAll | Where-Object { $_.severity } | Group-Object { "$($_.severity)".ToLower() } |
+                Sort-Object Count -Descending | ForEach-Object { "$($_.Count) $($_.Name)" })
+    # Tablo yalnizca ilk birkacini gosterir - okuyucu gercek olcegi buradan gorsun
+    "$($cdAll.Count) custom detection rules are defined$(if ($cdSev.Count) { " ($($cdSev -join ', '))" })" +
+    "$(if ($cdOff.Count) { ", of which $($cdOff.Count) are disabled" })." +
+    " The table below lists the ones that warrant attention first, not the whole inventory;" +
+    " at this volume the question is no longer whether rules exist but whether they are reviewed," +
+    " version-controlled and still firing."
+} else {
+    'No custom detection rules are defined, so the environment relies entirely on Microsoft-supplied detections.'
+}) Threat hunting output should feed back into custom detections; without a scheduled hunting cadence this loop rarely forms."
 
 $drafts['[Assess how alerts are consumed operationally'] =
 "$(if ($d.tables.socKpi) { "Measured response performance: $((@($d.tables.socKpi) | ForEach-Object { "$($_.metric) $($_.observed)" }) -join '; ')." } else { 'Response timing could not be measured from the available alert data.' }) Confirm the operating model with the client: who performs first-line triage, in which console, against which service level, and what happens outside business hours."
