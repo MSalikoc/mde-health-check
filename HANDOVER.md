@@ -177,6 +177,31 @@ Two traps paid for while building it: an apostrophe inside a single-quoted strin
 the string (the cousin of trap 7), and a regex evaluator that returns the captured group rather than
 the whole match silently deletes the `<tr>` tags around every row it touches.
 
+## What is verified, and what is not
+
+Written 2026-08-13, after a week of changes to both repositories. Keep this honest — the next
+session should know which claims rest on evidence.
+
+**Verified against real or realistic data.** Everything in the renderer: the maturity table and both
+cover KPIs, the host firewall and BitLocker rows, the misconfiguration table, findings due dates,
+indicator rows, the custom-detection selection and summary (reproduced with a 677-rule fixture
+matching a customer's exact record shape), row add and delete, and the questionnaire round trip.
+Field counts were compared section by section before and after every change; no section regressed.
+
+**Logic-tested but never run against a live API.** Three collector changes:
+
+- the `secureScoreControlProfiles` call and the join to `controlName`. The join key is an assumption.
+- the exclusion trim and risk classification, tested against nine real-shaped values.
+- the device-code error handling and the AADSTS50131 guidance.
+
+All three fail safe by design: where they cannot resolve, the field stays blank and the console says
+why. The failure mode is a missing value, never a wrong one. Watch the console on the next
+collection - "Secure score control profiles were not readable" means the join did not hold.
+
+**Collector and renderer must be updated together.** Re-rendering an older JSON with the current
+renderer works, but fields the collector now produces - `impact` on secure score actions, `risk` on
+exclusions - are absent from it and stay blank. That is expected, not a fault.
+
 ## Open items
 
 - **Align the renderer with `MANUAL-FIELDS.md`.** Replace the `Round($score/20)` band derivation with
