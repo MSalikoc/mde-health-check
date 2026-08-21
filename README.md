@@ -168,8 +168,9 @@ during the collection visit:
 .\New-Survey.ps1 -ClientName "Contoso A.S."
 ```
 
-That writes `mde-survey-form.html`: one self-contained file, no install, works offline, nothing
-transmitted anywhere.
+That writes `mde-survey-form.html` and opens it in your browser so you can look it over before it
+goes out — one self-contained file, no install, works offline, nothing transmitted anywhere. Add
+`-NoOpen` to skip opening it.
 
 **The customer** opens it in any browser, answers what they know, and presses **Download answers**,
 which saves `mde-survey-<tenant>-<date>.json` on their machine. They send that back alongside the

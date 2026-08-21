@@ -25,7 +25,8 @@ param(
     [string]$Questions,
     [string]$ClientName,
     [string]$OutFile = './mde-survey-form.html',
-    [switch]$ShowUnasked          # sorusu olmayan sablon bosluklarini da listele
+    [switch]$ShowUnasked,         # sorusu olmayan sablon bosluklarini da listele
+    [switch]$NoOpen               # formu tarayicida acma
 )
 
 $ErrorActionPreference = 'Stop'
@@ -256,4 +257,8 @@ if ($unasked.Count) {
     if ($ShowUnasked) { $unasked | Sort-Object | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray } }
     else { Write-Host '  Listelemek icin -ShowUnasked ekleyin.' -ForegroundColor DarkGray }
 }
+Write-Host '  Musteriye bu tek dosyayi gonderin; geri gelen JSON MDE-Render.ps1 -SurveyFile ile islenir.' -ForegroundColor DarkGray
 Write-Host ''
+
+# MDE-Render.ps1 raporu aciyor; anket de acilsin - iki script ayni davransin
+if (-not $NoOpen) { try { Start-Process (Resolve-Path $OutFile) } catch { } }
