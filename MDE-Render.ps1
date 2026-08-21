@@ -58,82 +58,6 @@ function Esc([string]$s) { $s -replace '&', '&amp;' -replace '<', '&lt;' -replac
 # okumalari buradan gecer.
 function Rows($Table) { return @($Table | Where-Object { $null -ne $_ }) }
 
-function Set-DefaultProp {
-    param([object]$Obj, [string]$Name, $Value)
-    if ($Obj.PSObject.Properties.Name -notcontains $Name) {
-        $Obj | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
-    }
-}
-function Set-KpiAlias {
-    param([string]$From, [string]$To)
-    $fromV = $d.kpi.PSObject.Properties[$From]
-    $toV = $d.kpi.PSObject.Properties[$To]
-    if (-not $toV -and $fromV -and "$($fromV.Value)" -ne '') {
-        $d.kpi | Add-Member -NotePropertyName $To -NotePropertyValue $fromV.Value -Force
-    }
-}
-function Set-KpiFallback {
-    param([string]$Name, [string]$Value = 'Not available')
-    $p = $d.kpi.PSObject.Properties[$Name]
-    if (-not $p -or "$($p.Value)" -eq '') {
-        $d.kpi | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
-    }
-}
-function Add-CollectionWarning {
-    param([string]$Text)
-    if (-not $Text) { return }
-    $exists = @($d.meta.warnings | Where-Object { "$_" -eq $Text }).Count -gt 0
-    if (-not $exists) { [void]$d.meta.warnings.Add($Text) }
-}
-
-# Collector JSON surem/tenant'e gore dar gelebilir: render asamasinda beklenen anahtarlar
-# normalize edilir ki bolumler bos kalmak yerine acik bir "Not available" bilgisi gostersin.
-Set-DefaultProp $d 'meta'   ([pscustomobject]@{})
-Set-DefaultProp $d 'kpi'    ([pscustomobject]@{})
-Set-DefaultProp $d 'charts' ([pscustomobject]@{})
-Set-DefaultProp $d 'tables' ([pscustomobject]@{})
-Set-DefaultProp $d 'raw'    ([pscustomobject]@{})
-Set-DefaultProp $d 'manual' @()
-
-Set-DefaultProp $d.meta 'warnings' @()
-if ($d.meta.warnings -isnot [System.Collections.ArrayList]) {
-    $d.meta.warnings = [System.Collections.ArrayList]@($d.meta.warnings)
-}
-Set-DefaultProp $d.meta 'generatedUtc' ''
-Set-DefaultProp $d.meta 'tenantName' ''
-Set-DefaultProp $d.meta 'verifiedDomain' ''
-Set-DefaultProp $d.meta 'alertWindow' ''
-Set-DefaultProp $d.meta 'eventWindow' ''
-
-foreach ($t in @(
-    'deviceInventory', 'topVulnerableSoftware', 'secureScoreActions', 'secureConfiguration',
-    'asrRules', 'asrEvents', 'avExclusions', 'indicators', 'privilegedRoles',
-    'conditionalAccess', 'intunePolicies', 'customDetections', 'socKpi', 'queries', 'licenses'
-)) { Set-DefaultProp $d.tables $t @() }
-Set-DefaultProp $d.raw 'machineGroups' @()
-
-Set-KpiAlias -From 'Exposure score' -To 'Exposure Score'
-Set-KpiAlias -From 'Total in scope' -To 'Total Endpoints'
-Set-KpiAlias -From 'Onboarded' -To 'Onboarded Devices'
-Set-KpiAlias -From 'Can be onboarded' -To 'Can Be Onboarded'
-
-if (-not $d.kpi.PSObject.Properties['Can Be Onboarded'] -and $d.kpi.PSObject.Properties['Not onboarded']) {
-    $d.kpi | Add-Member -NotePropertyName 'Can Be Onboarded' -NotePropertyValue $d.kpi.'Not onboarded' -Force
-}
-
-foreach ($k in @(
-    'Exposure Score', 'Secure score for devices', 'Total vulnerabilities', 'Critical CVEs',
-    'Software products', 'Rules in block mode', 'Rules in audit mode'
-)) { Set-KpiFallback -Name $k }
-
-if ((Rows $d.tables.secureConfiguration).Count -eq 0) { Add-CollectionWarning 'Secure configuration assessment not available (table empty or not licensed).' }
-if ((Rows $d.tables.asrRules).Count -eq 0)            { Add-CollectionWarning 'ASR rule mode export not available from Intune policy data.' }
-if ((Rows $d.tables.avExclusions).Count -eq 0)        { Add-CollectionWarning 'AV exclusions were not returned (Intune/GPO visibility gap or no configured exclusions).' }
-if ((Rows $d.tables.topVulnerableSoftware).Count -eq 0) { Add-CollectionWarning 'Vulnerability software inventory not available (TVM data missing or unlicensed).' }
-if ((Rows $d.tables.secureScoreActions).Count -eq 0)  { Add-CollectionWarning 'Security recommendations were not returned.' }
-if ((Rows $d.tables.indicators).Count -eq 0)          { Add-CollectionWarning 'Indicators feed returned no rows.' }
-if ((Rows $d.tables.privilegedRoles).Count -eq 0)     { Add-CollectionWarning 'Privileged role membership could not be enumerated.' }
-
 # Alan puani (0-100) -> olgunluk seviyesi (1-5). Bantlar MANUAL-FIELDS.md'de tanimli;
 # 95 ve 60 sinirlari checklist'in Compliant/Partial esikleriyle ayni olsun diye secildi.
 # BURADAN BASKA YERDE seviye hesaplamayin - grafik, tablo ve dokuman ayrilirsa rapor kendi
@@ -414,18 +338,6 @@ if ($d.tables.topVulnerableSoftware) {
         "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
     }, 1)
 }
-else {
-    $rxTbl = [regex]'(?s)(<h3>Top Vulnerable Software</h3>\s*<table class="t compact">.*?<tbody>)(.*?)(</tbody>)'
-    $html = $rxTbl.Replace($html, {
-        param($m)
-        $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
-            param($rm)
-            $script:filled.rows++
-            '<tr><td class="f" contenteditable data-ph="––"><span class="draft">Not available — TVM vulnerability software data was not collected.</span></td><td class="f" contenteditable data-ph="––">N/A</td><td class="num f" contenteditable data-ph="––">N/A</td><td class="num f" contenteditable data-ph="––">N/A</td><td class="num f" contenteditable data-ph="––">N/A</td><td class="f" contenteditable data-ph="––"><span class="draft">Verify TVM licensing, device visibility and data collection permissions.</span></td></tr>'
-        }, 1)
-        "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
-    }, 1)
-}
 
 # ------------------------------------------- SECURE SCORE ÖNERİLERİ -------
 if ($d.tables.secureScoreActions) {
@@ -440,21 +352,9 @@ if ($d.tables.secureScoreActions) {
             $x = $a[$script:ssIdx]; $script:ssIdx++
             $script:filled.rows++
             @"
-<tr><td class="f" contenteditable data-ph="––">$(Esc $x.action)</td><td class="num f" contenteditable data-ph="+––"></td><td class="f" contenteditable data-ph="––">$(Esc $x.state)</td><td class="f" contenteditable data-ph="––">$(Esc $x.category)</td><td class="f" contenteditable data-ph="––"></td></tr>
+<tr><td class="f" contenteditable data-ph="––">$(Esc $x.action)</td><td class="num f" contenteditable data-ph="+––">$(if ($null -ne $x.impact -and [double]$x.impact -gt 0) { "+$([math]::Round([double]$x.impact, 1))" })</td><td class="f" contenteditable data-ph="––">$(Esc $x.state)</td><td class="f" contenteditable data-ph="––">$(Esc $x.category)</td><td class="f" contenteditable data-ph="––"></td></tr>
 "@
         })
-        "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
-    }, 1)
-}
-else {
-    $rxTbl = [regex]'(?s)(<h3>Microsoft Secure Score — Top Recommended Actions</h3>\s*<table class="t compact">.*?<tbody>)(.*?)(</tbody>)'
-    $html = $rxTbl.Replace($html, {
-        param($m)
-        $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
-            param($rm)
-            $script:filled.rows++
-            '<tr><td class="f" contenteditable data-ph="––"><span class="draft">Not available — security recommendations were not returned by the collector.</span></td><td class="num f" contenteditable data-ph="+––">N/A</td><td class="f" contenteditable data-ph="––">Not available</td><td class="f" contenteditable data-ph="––">Not available</td><td class="f" contenteditable data-ph="––"><span class="draft">Confirm Graph/MDE recommendation permissions and licensing.</span></td></tr>'
-        }, 1)
         "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
     }, 1)
 }
@@ -553,20 +453,6 @@ function Fill-Rows {
 }
 
 $script:html = $html   # yardimci fonksiyonlar script kapsamini kullanir
-
-# TVM/recommendation kaynaklari bossa bolum 09 satirlari bos kalmasin.
-if ((Rows $d.tables.topVulnerableSoftware).Count -eq 0 -and (Rows $d.tables.secureScoreActions).Count -eq 0) {
-    Fill-Rows -Heading 'Vulnerability Management Capability Review' -Map @{
-        '^Software inventory completeness' = @{ v = @('Not available — vulnerability software inventory was not returned'); status = 'na'; draft = $true }
-        '^Security recommendations triaged' = @{ v = @('Not available — security recommendation feed is empty'); status = 'na'; draft = $true }
-        '^Remediation requests'            = @{ v = @('Not available — no remediation request telemetry returned'); status = 'na'; draft = $true }
-        '^Exception / mitigation tracking' = @{ v = @('Not available — no exception dataset was collected'); status = 'na'; draft = $true }
-        '^Browser extension assessment'    = @{ v = @('Not available — browser extension TVM data not collected'); status = 'na'; draft = $true }
-        '^Certificate inventory assessment' = @{ v = @('Not available — certificate indicator data not collected'); status = 'na'; draft = $true }
-        '^Firmware / hardware advisories'  = @{ v = @('Not available — firmware advisory table not available in this tenant/license'); status = 'na'; draft = $true }
-        '^Missing KB / OS patch visibility' = @{ v = @('Not available — patch visibility table not returned'); status = 'na'; draft = $true }
-    } | Out-Null
-}
 
 # ---------------------------------------------------------- BULGU KAYDI --
 if ($d.tables.findings) {
@@ -873,14 +759,6 @@ if ($d.tables.privilegedRoles) {
     }
     Fill-Rows -Heading 'Role-Based Access Control' -Map $map | Out-Null
 }
-else {
-    Fill-Rows -Heading 'Role-Based Access Control' -Map @{
-        'Global Administrator'   = @{ v = @('Not available', 'N/A', 'Not available'); status = 'na'; draft = $true }
-        'Security Administrator' = @{ v = @('Not available', 'N/A', 'Not available'); status = 'na'; draft = $true }
-        'Security Operator'      = @{ v = @('Not available', 'N/A', 'Not available'); status = 'na'; draft = $true }
-        'Security Reader'        = @{ v = @('Not available', 'N/A', 'Not available'); status = 'na'; draft = $true }
-    } | Out-Null
-}
 
 # ------------------------------------------------- YONETISIM KONTROLLERI --
 # Bolum 14'un governance tablosunun kendi h3'u yok - kendi sutun basligindan yakalanir.
@@ -924,18 +802,6 @@ if ($d.tables.intunePolicies) {
         status = 'pass'; draft = $true
     }
 }
-if (-not $ca) {
-    $intMap['Device risk .*Conditional Access'] = @{
-        v = @('Not available — Conditional Access policy data was not returned')
-        status = 'na'; draft = $true
-    }
-}
-if ((Rows $d.tables.intunePolicies).Count -eq 0) {
-    $intMap['Microsoft Intune connection'] = @{
-        v = @('Not available — Intune configuration policies were not readable')
-        status = 'na'; draft = $true
-    }
-}
 if ($intMap.Count) { Fill-Rows -Heading 'Advanced Features &amp; Integration Switches' -Map $intMap | Out-Null }
 
 # ------------------------------------------------------------ INDICATORS --
@@ -961,14 +827,6 @@ if ($ind.Count) {
     }
     Fill-Rows -Heading 'Threat Analytics &amp; Threat Intelligence' -Map $indMap | Out-Null
 }
-else {
-    Fill-Rows -Heading 'Threat Analytics &amp; Threat Intelligence' -Map @{
-        'Indicators \(file hash\)'      = @{ v = @('Not available — no file-hash indicators returned'); status = 'na'; draft = $true }
-        'Indicators \(IP / URL / domain\)' = @{ v = @('Not available — no network indicators returned'); status = 'na'; draft = $true }
-        'Indicators \(certificates\)'   = @{ v = @('Not available — no certificate indicators returned'); status = 'na'; draft = $true }
-        'Indicator expiry'              = @{ v = @('Not available — indicator dataset is empty'); status = 'na'; draft = $true }
-    } | Out-Null
-}
 
 # ------------------------------------------------------------- SOC KPI ---
 if ($d.tables.socKpi) {
@@ -992,14 +850,6 @@ if ($d.tables.avExclusions) {
         'Process exclusions'   = @{ v = @("$($procs.Count)", '0', '') }
     } | Out-Null
 }
-else {
-    Fill-Rows -Heading 'Exclusion Hygiene' -Map @{
-        'Path exclusions'      = @{ v = @('Not available', 'Not available', 'No exclusions were collected from Intune or visible policy sources'); status = 'na'; draft = $true }
-        'Extension exclusions' = @{ v = @('Not available', 'Not available', 'Not available'); status = 'na'; draft = $true }
-        'Process exclusions'   = @{ v = @('Not available', 'Not available', 'Not available'); status = 'na'; draft = $true }
-        'ASR per-rule exclusions' = @{ v = @('Not available', 'Not available', 'ASR exclusion export was not returned'); status = 'na'; draft = $true }
-    } | Out-Null
-}
 
 # ------------------------------------------- OZEL TESPIT KURALLARI -------
 if ($d.tables.customDetections -and @($d.tables.customDetections).Count -gt 0) {
@@ -1016,18 +866,6 @@ if ($d.tables.customDetections -and @($d.tables.customDetections).Count -gt 0) {
             $sev = if ($r.severity) { $r.severity.ToLower() } else { '' }
             "<tr><td class=`"f`" contenteditable data-ph=`"––`">$(Esc $r.name)</td><td class=`"f`" contenteditable data-ph=`"––`">$(Esc $r.frequency)</td><td class=`"sev`">$(New-Select 'sev' $SEV_OPTS $sev)</td><td class=`"f`" contenteditable data-ph=`"––`">$(Esc $r.actions)</td><td class=`"f`" contenteditable data-ph=`"––`"></td></tr>"
         })
-        "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
-    }, 1)
-}
-else {
-    $rx = [regex]'(?s)(<h3>Custom Detection Rule Inventory</h3>\s*<table class="t compact">.*?<tbody>)(.*?)(</tbody>)'
-    $script:html = $rx.Replace($script:html, {
-        param($m)
-        $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
-            param($rm)
-            $script:filled.rows++
-            '<tr><td class="f" contenteditable data-ph="––"><span class="draft">Not available — no custom detection rules were collected.</span></td><td class="f" contenteditable data-ph="––">N/A</td><td class="sev"><select class="sev" data-v=""><option value="" selected>Severity</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></td><td class="f" contenteditable data-ph="––">N/A</td><td class="f" contenteditable data-ph="––"><span class="draft">Confirm whether no rules exist or API permissions blocked this section.</span></td></tr>'
-        }, 1)
         "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
     }, 1)
 }
@@ -1437,6 +1275,23 @@ $bp = [ordered]@{
 $cfgRows = Rows $d.tables.secureConfiguration
 $cfgById = @{}
 foreach ($c in $cfgRows) { $cfgById[$c.id] = $c }
+$script:cfgById = $cfgById
+
+# Bir rapor satirini birden fazla kontrol karsilar (ornegin "firewall tum profillerde"
+# = ac + domain + private + public). Ortalamayi alir ve kac kontrolden geldigini yazar.
+# Eslesmeyen scid sessizce atlanir; hicbiri yoksa $null doner ve satira dokunulmaz.
+function Cfg-Agg {
+    param([string[]]$Scids)
+    $rows = @($Scids | ForEach-Object { $script:cfgById[$_] } | Where-Object { $_ })
+    if ($rows.Count -eq 0) { return $null }
+    $pct = [math]::Round(($rows | Measure-Object compliance -Average).Average)
+    $app = ($rows | Measure-Object applicable -Maximum).Maximum
+    [pscustomobject]@{
+        pct    = $pct
+        status = $(if ($pct -ge 95) { 'pass' } elseif ($pct -ge 60) { 'partial' } else { 'fail' })
+        text   = "$pct% of $app devices, across $($rows.Count) control$(if ($rows.Count -ne 1) { 's' })"
+    }
+}
 
 function Cfg-Cell {
     param([string]$Scid)
@@ -1504,8 +1359,6 @@ $asrByRule = @{}
 foreach ($r in @($d.tables.asrRules)) { $asrByRule[("$($r.rule)".ToLower())] = $r.mode }
 $asrEvByName = @{}
 foreach ($e in @($d.tables.asrEvents)) { $asrEvByName[("$($e.rule)".ToLower())] = $e }
-$script:asrHasData = ((Rows $d.tables.asrRules).Count -gt 0 -or (Rows $d.tables.asrEvents).Count -gt 0 -or
-    @($cfgAll | Where-Object { $_.subcategory -eq 'Attack Surface Reduction' }).Count -gt 0)
 
 $MODE_OPTS2 = @(@('', 'Not configured'), @('pass', 'Block'), @('partial', 'Audit'), @('fail', 'Disabled'), @('na', 'Warn'))
 
@@ -1527,21 +1380,14 @@ $html = [regex]::Replace($html, '(?s)<tr>(?:(?!</tr>).)*</tr>', {
             $v = switch ($mode) { 'Block' { 'pass' } 'Audit' { 'partial' } 'Warn' { 'na' } 'Disabled' { 'fail' } default { '' } }
             $row = $row -replace '<td class="mode"></td>', ('<td class="mode">' + (New-Select 'st' $MODE_OPTS2 $v) + '</td>')
             $script:cfgFilled++
-        } elseif (-not $script:asrHasData) {
-            $row = $row -replace '<td class="mode"></td>', ('<td class="mode">' + (New-Select 'st' $MODE_OPTS2 'na') + '</td>')
-            $script:cfgFilled++
         }
         $ev = if ($asrHit.ev) { $asrEvByName[$asrHit.ev.ToLower()] } else { $null }
         $cfg = if ($asrHit.scid) { Cfg-Cell $asrHit.scid } else { $null }
         # Exclusions | Audit events sutunlari
-        if (-not $script:asrHasData) {
-            $script:asrVals = @('Not available', 'Not available')
-        } else {
-            $script:asrVals = @(
-                $(if ($cfg) { "$($cfg.pct)% coverage" } else { '' }),
-                $(if ($ev) { "$($ev.events)" } else { $(if ($mode -eq 'Audit') { '0' } else { '' }) })
-            )
-        }
+        $script:asrVals = @(
+            $(if ($cfg) { "$($cfg.pct)% coverage" } else { '' }),
+            $(if ($ev) { "$($ev.events)" } else { $(if ($mode -eq 'Audit') { '0' } else { '' }) })
+        )
         $script:asrIdx = 0
         $row = [regex]::Replace($row, '<td class="num f"([^>]*)></td>', {
             param($cm)
@@ -1550,11 +1396,6 @@ $html = [regex]::Replace($html, '(?s)<tr>(?:(?!</tr>).)*</tr>', {
             if ("$val" -eq '') { return $cm.Value }
             "<td class=`"num f`"$($cm.Groups[1].Value)>$val</td>"
         })
-        if (-not $script:asrHasData) {
-            $row = [regex]::Replace($row, '<td([^>]*class="[^"]*\bf\b[^"]*"[^>]*data-ph="[^"]*")></td>', {
-                param($cm) '<td' + $cm.Groups[1].Value + '><span class="draft">Not available — ASR policy/telemetry data was not returned.</span></td>'
-            }, 1)
-        }
         return $row
     }
 
@@ -1853,8 +1694,37 @@ if ($CHK -and $CHK.Count -gt 0) {
     }
 }
 
+# ============================================================================
+#  HOST FIREWALL / CIHAZ KONTROLU (Bolum 08)
+#  Bu satirlar bos kaliyordu ama kontroller secureConfiguration'da duruyor.
+#  ESLEME KURALI: kontrol satiri gercekten karsilamiyorsa BOS BIRAK. "Credential
+#  Guard" satirini "yerel parola saklamayi kapat" kontroluyle doldurmak, tamper
+#  protection hatasinin (tuzak 9) baska kiliktaki hali olurdu.
+# ============================================================================
+$fwMap = @{}
+$fwAll = Cfg-Agg @('scid-2070', 'scid-2071', 'scid-2072', 'scid-2073')   # ac + domain/private/public profil
+if ($fwAll) { $fwMap['Defender Firewall enabled'] = @{ v = @('', $fwAll.text); status = $fwAll.status; draft = $true } }
+$fwMerge = Cfg-Agg @('scid-50', 'scid-51')                                # yerel kural birlestirmeyi kapat
+if ($fwMerge) { $fwMap['Rule merging'] = @{ v = @('', $fwMerge.text); status = $fwMerge.status; draft = $true } }
+if ($fwMap.Count) { Fill-Rows -Heading 'Host Firewall' -Map $fwMap | Out-Null }
+
+$dcMap = @{}
+$bit = Cfg-Agg @('scid-2090')                                             # tum BitLocker destekli surucleri sifrele
+if ($bit) { $dcMap['BitLocker'] = @{ v = @('', $bit.text); status = $bit.status; draft = $true } }
+if ($dcMap.Count) { Fill-Rows -Heading 'Device Control &amp; Peripheral Security' -Map $dcMap | Out-Null }
+
 # ------------------------------------------- MISCONFIGURATION FINDINGS ----
-$worst = @($cfgAll | Where-Object { $_.applicable -ge 50 } | Sort-Object compliance | Select-Object -First 6)
+# Esik mutlak 50 idi: 9 cihazlik bir tenant'ta hicbir kontrol gecmiyor ve tablo
+# sessizce bos kaliyordu. Olcegi ortama gore al - en genis uygulanabilirlik neyse
+# onun ceyregi, en az 3 cihaz. Boylece kucuk ortamda da dolar, tek cihazlik gurultu
+# de tabloya cikmaz.
+$cfgMaxApp = 0
+if ($cfgAll.Count) { $cfgMaxApp = ($cfgAll | Measure-Object applicable -Maximum).Maximum }
+$cfgFloor = [math]::Max(3, [math]::Floor($cfgMaxApp * 0.25))
+$worst = @($cfgAll | Where-Object { $_.applicable -ge $cfgFloor } |
+           Sort-Object @{ Expression = { [double]$_.compliance } },
+                       @{ Expression = { [int]$_.applicable }; Descending = $true } |
+           Select-Object -First 6)
 if ($worst.Count) {
     $script:misRows = $worst
     $script:misIdx = 0
@@ -1874,20 +1744,6 @@ if ($worst.Count) {
                 "<td class=`"sev`">$(New-Select 'sev' $SEV_OPTS $sev)</td>" +
                 "<td class=`"f`" contenteditable data-ph=`"––`"><span class=`"draft`">$(Esc "Currently compliant on $([math]::Round([double]$c.compliance))% of $($c.applicable) applicable devices ($($c.id))")</span></td></tr>"
             })
-            "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
-        }, 1)
-    }
-}
-else {
-    $rxMis = [regex]'(?s)(<h3[^>]*>Misconfiguration Findings</h3>(?:(?!<h3).)*?<tbody>)(.*?)(</tbody>)'
-    if ($rxMis.IsMatch($script:html)) {
-        $script:html = $rxMis.Replace($script:html, {
-            param($m)
-            $body = [regex]::Replace($m.Groups[2].Value, '(?s)<tr>.*?</tr>', {
-                param($rm)
-                $script:filled.rows++
-                '<tr><td class="f" contenteditable data-ph="––"><span class="draft">Not available — secure configuration assessment rows were not collected.</span></td><td class="num f" contenteditable data-ph="––">N/A</td><td class="sev"><select class="sev" data-v=""><option value="" selected>Severity</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></td><td class="f" contenteditable data-ph="––"><span class="draft">Verify TVM configuration assessment availability and collector permissions.</span></td></tr>'
-            }, 1)
             "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
         }, 1)
     }
