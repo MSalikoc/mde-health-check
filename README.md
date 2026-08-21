@@ -15,7 +15,7 @@ copy of them, so there is never a second, older collector to run by mistake.
 | `MDE-Render.ps1` | **Runs at your end.** Merges the JSON into the template → report |
 | `Test-Parse.ps1` | Syntax check (run this first when troubleshooting) |
 | `MDE-Health-Assessment-Template.html` | Empty 24-section report template |
-| `MDE-Health-Assessment-SAMPLE.html` | Version filled with sample data (fictional Northwind Holding) |
+| `MDE-Health-Assessment-SAMPLE.html` | Version filled with sample data (fictional Contoso) |
 | `MDE-Health-Assessment-Template.docx` | Word version of the same report |
 | `sample-data.json` | For testing the renderer without a tenant |
 | `MANUAL-FIELDS.md` | **What goes in every blank field, and on what basis** — scoring rubrics, portal lookups |

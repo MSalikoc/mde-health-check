@@ -1,9 +1,9 @@
 {
   "meta": {
     "generatedUtc": "2026-06-27 09:14:22Z",
-    "tenantId": "northwindholding.onmicrosoft.com",
-    "tenantName": "Northwind Holding A.S.",
-    "verifiedDomain": "northwindholding.onmicrosoft.com",
+    "tenantId": "contoso.onmicrosoft.com",
+    "tenantName": "Contoso A.S.",
+    "verifiedDomain": "contoso.onmicrosoft.com",
     "alertWindow": "90 days",
     "eventWindow": "30 days",
     "collector": "MDE-Collect.ps1 v1.0 (sample data)",
