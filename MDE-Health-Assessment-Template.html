@@ -167,6 +167,10 @@ body.nodrafts .draft:before{display:none}
 .card{border:1px solid var(--line);border-radius:6px;padding:12px 13px;background:#fff}
 .card.soft{background:var(--soft);border-color:var(--soft2)}
 .card h4{margin-top:0}
+span.st,span.sev{
+  display:inline-block;padding:2px 7px;border:1px solid var(--line);border-radius:4px;
+  font-size:8pt;font-weight:600;text-align:center;
+}
 .callout{
   border-left:4px solid var(--blue);background:#EEF2FE;
   padding:11px 13px;border-radius:0 5px 5px 0;font-size:9.5pt;margin:12px 0;
@@ -195,15 +199,15 @@ select.st{
   font-family:var(--sans);font-size:8pt;font-weight:700;border:1px solid var(--line);
   border-radius:3px;padding:2px 4px;background:#fff;color:var(--muted);width:100%;
 }
-select.st[data-v="pass"]{background:#E7F6EF;color:var(--ok);border-color:#B7E2CD}
-select.st[data-v="partial"]{background:#FFF4E0;color:var(--warn);border-color:#F0D9A8}
-select.st[data-v="fail"]{background:#FBE6E3;color:var(--crit);border-color:#F0BEB7}
-select.st[data-v="na"]{background:var(--soft2);color:var(--muted)}
+.st[data-v="pass"]{background:#E7F6EF;color:var(--ok);border-color:#B7E2CD}
+.st[data-v="partial"]{background:#FFF4E0;color:var(--warn);border-color:#F0D9A8}
+.st[data-v="fail"]{background:#FBE6E3;color:var(--crit);border-color:#F0BEB7}
+.st[data-v="na"]{background:var(--soft2);color:var(--muted)}
 select.sev{font-family:var(--sans);font-size:8pt;font-weight:700;border:1px solid var(--line);border-radius:3px;padding:2px 4px;background:#fff;width:100%}
-select.sev[data-v="critical"]{background:#C0392B;color:#fff;border-color:#C0392B}
-select.sev[data-v="high"]{background:#E2705B;color:#fff;border-color:#E2705B}
-select.sev[data-v="medium"]{background:#FFF4E0;color:var(--warn);border-color:#F0D9A8}
-select.sev[data-v="low"]{background:#E7F6EF;color:var(--ok);border-color:#B7E2CD}
+.sev[data-v="critical"]{background:#C0392B;color:#fff;border-color:#C0392B}
+.sev[data-v="high"]{background:#E2705B;color:#fff;border-color:#E2705B}
+.sev[data-v="medium"]{background:#FFF4E0;color:var(--warn);border-color:#F0D9A8}
+.sev[data-v="low"]{background:#E7F6EF;color:var(--ok);border-color:#B7E2CD}
 .badge{
   display:inline-block;padding:1.5px 7px;border-radius:11px;font-size:7.5pt;font-weight:700;
   letter-spacing:.05em;text-transform:uppercase;background:var(--soft2);color:var(--muted);
@@ -303,6 +307,9 @@ body.nodata .datahint{display:none}
 /* ---------- Yazdırma ---------- */
 @page{size:A4;margin:0}
 @media print{
+  /* Tarayici baskida arka plan renklerini varsayilan olarak atar; durum rozetleri ve
+     tablo basliklari renksiz cikip "renk kaymasi" gibi gorunuyordu. */
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   body{background:#fff}
   #bar,#toc{display:none!important}
   #doc{padding:0}
@@ -325,7 +332,8 @@ body.nodata .datahint{display:none}
   <b>MDE HEALTH CHECK ASSESSMENT</b>
   <button onclick="toggleToc()">☰ Contents</button>
   <button onclick="window.print()">🖨 Print / PDF</button>
-  <button onclick="saveHtml()">💾 Save as HTML</button>
+  <button onclick="saveFinal()" title="Static copy for the client: no editing, no scripts, charts baked in">📤 Save final</button>
+  <button class="ghost" onclick="saveHtml()">💾 Save working copy</button>
   <button class="ghost" onclick="document.body.classList.toggle('guides')">Toggle field outlines</button>
   <button class="ghost" onclick="document.body.classList.toggle('nodata')">Toggle chart data tables</button>
   <button class="ghost" id="rowToolBtn" onclick="toggleRowTools()" title="Show or hide the per-row delete buttons and the add-row buttons (never printed)">⊞ Row editing</button>
@@ -2671,7 +2679,7 @@ function toggleRowTools(){
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-13-pagedel';
+const DOCVER='2026-08-13-final';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
@@ -2698,6 +2706,37 @@ function resetDoc(){
   if(confirm('Everything you have entered will be discarded and the blank template restored. Are you sure?')){
     localStorage.removeItem(KEY);location.reload();
   }
+}
+/* Musteriye giden kopya. saveHtml() calisma kopyasidir - duzenlenebilir kalir ve
+   grafikleri JS cizer. Bu ise anlik goruntudur: script yok, contenteditable yok,
+   secici yok. Grafikler zaten DOM'da SVG olarak duruyor, klonlanınca birlikte gelir. */
+function saveFinal(){
+  const pending=document.querySelectorAll('#doc .draft').length;
+  if(pending && !confirm(pending+' draft text(s) are still marked (REVIEW).\n\nExport anyway? The marks will be flattened into ordinary text.'))return;
+  paintSelects();
+  document.querySelectorAll('select').forEach(s=>[...s.options].forEach(o=>{
+    o.selected=(o.value===s.value);o.toggleAttribute('selected',o.value===s.value);}));
+
+  const clone=document.documentElement.cloneNode(true);
+  clone.querySelectorAll('#bar,#toc,.rowctl,.pagedel,script').forEach(n=>n.remove());
+  clone.querySelectorAll('[contenteditable]').forEach(n=>n.removeAttribute('contenteditable'));
+  clone.querySelectorAll('select').forEach(sel=>{
+    const opt=sel.querySelector('option[selected]');
+    const span=document.createElement('span');
+    span.className=sel.classList.contains('sev')?'sev':'st';
+    span.setAttribute('data-v',sel.getAttribute('data-v')||'');
+    span.textContent=opt?opt.textContent:'';
+    sel.replaceWith(span);
+  });
+  clone.querySelectorAll('.draft').forEach(d=>d.replaceWith(document.createTextNode(d.textContent)));
+  const b=clone.querySelector('body');
+  if(b)b.className='';
+  const html='<!DOCTYPE html>\n'+clone.outerHTML;
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='MDE-Assessment-final-'+new Date().toISOString().slice(0,10)+'.html';
+  a.click();URL.revokeObjectURL(a.href);
 }
 function saveHtml(){
   paintSelects();

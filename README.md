@@ -236,7 +236,24 @@ The template is picked up automatically from the script folder; use `-Template` 
 
 The JSON is plain text and editable — correct anything the collector got wrong, or fill in values it could not reach, then run the same command again.
 
-## Step 6 · Finish the report
+## Step 6 · Hand the report over
+
+The working copy is editable by design — that is what the review is. What the client
+receives should not be.
+
+**Save final** (toolbar) writes a locked copy: no `contenteditable`, no scripts, no dropdowns, no
+toolbar, and the (REVIEW) marks flattened into ordinary text. The charts are already drawn as SVG in
+the page, so they are baked into the file and survive without JavaScript. It warns first if drafts
+are still pending. **Save working copy** is the other button and keeps everything editable — that one
+is for you, not the client.
+
+**PDF**: Ctrl+P → Save as PDF, margins none, and leave **Background graphics** ticked. The template
+now sets `print-color-adjust: exact`, so status badges and table headers keep their colours; without
+it browsers drop background fills and the report prints washed out.
+
+The collector's own page carries a **Remove this page** button — it is not part of the report.
+
+## Step 6b · Finish the report
 
 1. The counter in the toolbar shows how many **(REVIEW)** drafts remain
 2. Read each draft; if it is correct, **click the (REVIEW) tag** (or `Alt+click` anywhere in the text) — the mark disappears, the text stays
