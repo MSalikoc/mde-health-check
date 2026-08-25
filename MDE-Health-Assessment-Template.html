@@ -279,6 +279,7 @@ body.nodata .datahint{display:none}
 /* ---------- Satir ekle / sil (yalnizca ekranda, baskida asla) ---------- */
 .rowctl{display:none}
 .pagedel{display:none}
+#printfoot{display:none}
 @media screen{
   body.rowtools .rowctl{display:inline-flex;align-items:center;justify-content:center}
   body.rowtools table.t tbody tr:hover{background:#FFF7E6}
@@ -313,7 +314,24 @@ body.nodata .datahint{display:none}
   body{background:#fff}
   #bar,#toc{display:none!important}
   #doc{padding:0}
-  .page{box-shadow:none;margin:0;page-break-after:always;width:210mm;min-height:296mm}
+  /* Bir bolum = bir basili sayfa varsayimi gercek veride tutmuyor: bolumlerin cogu
+     700-1000mm, yani 3-4 A4. Sabit yukseklik ve flex birlikte Chrome'un sayfalamasini
+     bozuyordu. Blok akisa birakip dogal bolunmesine izin veriyoruz; bolum yine yeni
+     sayfada baslar. */
+  .page{
+    box-shadow:none;margin:0;page-break-after:always;
+    display:block;width:auto;min-height:0;height:auto;
+    padding:13mm 14mm 20mm;
+  }
+  /* Bolum sonunda tek sefer cikan altbilgi, 3 sayfalik bolumun ilk iki sayfasini
+     altbilgisiz birakiyordu. Yerine her sayfada tekrar eden sabit bir seride. */
+  .pfoot{display:none}
+  #printfoot{
+    display:block;position:fixed;bottom:6mm;left:14mm;right:14mm;
+    border-top:1px solid var(--line);padding-top:4px;
+    font-size:7.5pt;color:var(--muted);letter-spacing:.02em;
+    display:flex;justify-content:space-between;
+  }
   .page:last-child{page-break-after:auto}
   body.guides .f:empty{outline:none}
   body.guides .f{background:transparent}
@@ -346,6 +364,7 @@ body.nodata .datahint{display:none}
 
 <nav id="toc"></nav>
 
+<div id="printfoot" aria-hidden="true"><span>CONFIDENTIAL</span><span>Microsoft Defender for Endpoint — Health Check Assessment</span></div>
 <div id="doc">
 
 <!-- ============================ P1 · KAPAK ============================ -->
@@ -2679,7 +2698,7 @@ function toggleRowTools(){
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-13-final';
+const DOCVER='2026-08-13-print';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
