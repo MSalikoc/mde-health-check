@@ -367,5 +367,334 @@
             )
             target = @{ section = 'Automation, Hunting & Custom Detections'; table = 'Threat Analytics & Threat Intelligence'; row = 'External TI feed integration' }
         }
+
+        # ---------------------------------------------- SOC isletim modeli
+        @{
+            id = 'Q-SocModel'
+            text = 'Who watches Defender alerts day to day?'
+            info = 'The team that actually performs first-line triage, whether that is your own staff, a provider, or a mixture.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'An in-house security operations team'; value = 'pass' }
+                @{ text = 'A managed provider (MSSP / MDR)'; value = 'pass' }
+                @{ text = 'A mixture - in-house in hours, provider outside them'; value = 'pass' }
+                @{ text = 'IT operations handle it alongside other work'; value = 'partial' }
+                @{ text = 'Nobody is formally responsible'; value = 'fail' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'SOC model' }
+        }
+        @{
+            id = 'Q-Coverage'
+            text = 'During which hours is someone available to act on a high severity alert?'
+            info = 'Ransomware does not wait for Monday. What matters is response cover, not whether a console is open.'
+            type = 'radio'
+            answers = @(
+                @{ text = '24x7'; value = 'pass' }
+                @{ text = 'Extended hours, with an on-call rota outside them'; value = 'pass' }
+                @{ text = 'Business hours only'; value = 'partial' }
+                @{ text = 'Best effort, no defined cover'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'Coverage hours' }
+        }
+        @{
+            id = 'Q-TriageConsole'
+            text = 'Which console does an analyst open first when an alert arrives?'
+            info = 'Where two consoles are in use, incident status usually diverges between them.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'The Microsoft Defender portal'; value = 'pass' }
+                @{ text = 'Microsoft Sentinel'; value = 'pass' }
+                @{ text = 'A third-party SIEM or SOAR'; value = 'partial' }
+                @{ text = 'The ticketing system'; value = 'partial' }
+                @{ text = 'It varies by analyst'; value = 'fail' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'Primary triage console' }
+        }
+        @{
+            id = 'Q-Ticketing'
+            text = 'Is every alert that is acted on recorded in a ticketing system?'
+            info = 'Without a case record there is no way to measure response time or show an auditor what happened.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, automatically'; value = 'pass' }
+                @{ text = 'Yes, but raised by hand'; value = 'partial' }
+                @{ text = 'Only for incidents that escalate'; value = 'partial' }
+                @{ text = 'No'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'Ticketing / case management' }
+        }
+        @{
+            id = 'Q-Escalation'
+            text = 'Is there a written escalation path for a confirmed incident?'
+            info = 'Who is called, in what order, and who can authorise isolating a business-critical machine.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, documented and tested'; value = 'pass' }
+                @{ text = 'Documented but never exercised'; value = 'partial' }
+                @{ text = 'Understood informally, not written down'; value = 'partial' }
+                @{ text = 'No'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'Escalation path defined' }
+        }
+        @{
+            id = 'Q-Tabletop'
+            text = 'When did you last rehearse a security incident?'
+            info = 'A tabletop exercise or a purple team engagement. Plans that have never been run tend to fail on the details.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Within the last 12 months'; value = 'pass' }
+                @{ text = 'One to two years ago'; value = 'partial' }
+                @{ text = 'Longer ago than that'; value = 'fail' }
+                @{ text = 'Never'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'Tabletop / purple team exercises' }
+        }
+        @{
+            id = 'Q-OnCall'
+            text = 'Is there an on-call rota with a documented handover?'
+            info = 'Handover is where incidents get dropped - an alert seen at the end of one shift and not carried into the next.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, with a written handover'; value = 'pass' }
+                @{ text = 'A rota, but handover is informal'; value = 'partial' }
+                @{ text = 'No rota'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'On-call rota & handover' }
+        }
+        @{
+            id = 'Q-Playbooks'
+            text = 'Are there response playbooks for the incident types you actually see?'
+            info = 'Ransomware, credential theft, business email compromise. A playbook is judged by whether an analyst can follow it at 3am.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, and they are kept current'; value = 'pass' }
+                @{ text = 'Some exist but are out of date'; value = 'partial' }
+                @{ text = 'No playbooks'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operating Model'; row = 'Incident response plan / playbooks' }
+        }
+
+        # ---------------------------------------------- Operasyonel KPI hedefleri
+        @{
+            id = 'Q-KpiAck'
+            text = 'What is your target for acknowledging a high severity alert?'
+            info = 'Acknowledgement, not resolution: how long before a human has looked at it.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Within 15 minutes'; value = 'pass' }
+                @{ text = 'Within an hour'; value = 'pass' }
+                @{ text = 'Within a working day'; value = 'partial' }
+                @{ text = 'No target is set'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operational KPIs'; row = 'Mean time to acknowledge' }
+        }
+        @{
+            id = 'Q-KpiContain'
+            text = 'What is your target for containing a confirmed compromise?'
+            info = 'Isolating the device or disabling the account - the point at which the attack stops spreading.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Within an hour'; value = 'pass' }
+                @{ text = 'Within four hours'; value = 'pass' }
+                @{ text = 'Within a working day'; value = 'partial' }
+                @{ text = 'No target is set'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operational KPIs'; row = 'Mean time to contain' }
+        }
+        @{
+            id = 'Q-KpiLoad'
+            text = 'Roughly how many alerts does one analyst handle in a day?'
+            info = 'An approximate number is enough. Beyond about thirty a day, triage quality falls regardless of the team.'
+            type = 'text'
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operational KPIs'; row = 'Alerts per analyst per day' }
+        }
+        @{
+            id = 'Q-KpiSla'
+            text = 'Do you measure whether response times meet the agreed service level?'
+            info = 'Measured and reported, rather than assumed.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, reported regularly'; value = 'pass' }
+                @{ text = 'Measured but not reported'; value = 'partial' }
+                @{ text = 'Not measured'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operational KPIs'; row = 'SLA compliance' }
+        }
+        @{
+            id = 'Q-KpiRepeat'
+            text = 'Do the same incidents keep coming back?'
+            info = 'Recurring incidents usually point at an unfixed root cause rather than a detection problem.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Rarely - root causes are addressed'; value = 'pass' }
+                @{ text = 'Sometimes'; value = 'partial' }
+                @{ text = 'Often, the same issues recur'; value = 'fail' }
+                @{ text = 'Not tracked'; value = '' }
+            )
+            target = @{ section = 'Security Operations & KPIs'; table = 'Operational KPIs'; row = 'Repeat / recurring incidents' }
+        }
+
+        # ---------------------------------------------- Bildirim ve raporlama
+        @{
+            id = 'Q-VulnNotify'
+            text = 'Are you notified when a new exploitable vulnerability affects your estate?'
+            info = 'A notification on every published CVE becomes noise; one scoped to vulnerabilities present on your devices is a work queue.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, scoped to vulnerabilities present in the estate'; value = 'pass' }
+                @{ text = 'Notified on everything published'; value = 'partial' }
+                @{ text = 'No notifications'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'RBAC, Device Groups & Governance'; table = 'Notification & Reporting Governance'; row = 'Vulnerability event notifications' }
+        }
+        @{
+            id = 'Q-ExecReporting'
+            text = 'Does anyone outside the security team see a regular security report?'
+            info = 'Regular reporting is usually what keeps remediation funded.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, monthly or more often'; value = 'pass' }
+                @{ text = 'Quarterly'; value = 'partial' }
+                @{ text = 'Only when something goes wrong'; value = 'fail' }
+                @{ text = 'No'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'RBAC, Device Groups & Governance'; table = 'Notification & Reporting Governance'; row = 'Executive / monthly security reporting' }
+        }
+        @{
+            id = 'Q-KpiDashboard'
+            text = 'Is there a dashboard management can look at without asking the security team?'
+            info = 'Coverage, sensor health, ASR enforcement and remediation SLA are the four worth showing.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes'; value = 'pass' }
+                @{ text = 'A report is produced by hand'; value = 'partial' }
+                @{ text = 'No'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'RBAC, Device Groups & Governance'; table = 'Notification & Reporting Governance'; row = 'KPI dashboard for management' }
+        }
+        @{
+            id = 'Q-ServiceHealth'
+            text = 'Does anyone watch the Microsoft service health and message centre?'
+            info = 'Breaking changes to Defender are announced there, and they change protection without anyone touching a policy.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, an owner is assigned'; value = 'pass' }
+                @{ text = 'Checked occasionally'; value = 'partial' }
+                @{ text = 'No'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'RBAC, Device Groups & Governance'; table = 'Notification & Reporting Governance'; row = 'Service health / message centre monitoring' }
+        }
+        @{
+            id = 'Q-RunBook'
+            text = 'Is there a written run-book for operating Defender?'
+            info = 'What makes response repeatable when the person who knows is on leave.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, and it is kept current'; value = 'pass' }
+                @{ text = 'One exists but is out of date'; value = 'partial' }
+                @{ text = 'No'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'RBAC, Device Groups & Governance'; table = 'Notification & Reporting Governance'; row = 'Documented run-book / operations manual' }
+        }
+
+        # ---------------------------------------------- Zafiyet yonetimi yetenekleri
+        @{
+            id = 'Q-VulnTriage'
+            text = 'Are the security recommendations reviewed on a schedule?'
+            info = 'Triaged by exposure and exploit availability rather than by CVSS alone.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, weekly or more often'; value = 'pass' }
+                @{ text = 'Monthly'; value = 'partial' }
+                @{ text = 'Only when something is escalated'; value = 'fail' }
+                @{ text = 'Not reviewed'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Vulnerability Management Capability Review'; row = 'Security recommendations triaged' }
+        }
+        @{
+            id = 'Q-VulnException'
+            text = 'When a vulnerability cannot be fixed, is the exception recorded and time-bound?'
+            info = 'Exceptions without an expiry date quietly become permanent.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, recorded with an expiry and reviewed'; value = 'pass' }
+                @{ text = 'Recorded but not time-bound'; value = 'partial' }
+                @{ text = 'Handled informally'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Vulnerability Management Capability Review'; row = 'Exception / mitigation tracking' }
+        }
+        @{
+            id = 'Q-PatchIntegration'
+            text = 'Which tool actually deploys the patches?'
+            info = 'Vulnerability data is only useful when it drives a patch cycle; name the tool that does the deploying.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Intune / Windows Update for Business'; value = 'pass' }
+                @{ text = 'Configuration Manager (MECM) or WSUS'; value = 'pass' }
+                @{ text = 'A third-party patch product'; value = 'pass' }
+                @{ text = 'Patching is manual'; value = 'fail' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Vulnerability Management Capability Review'; row = 'Patch management integration (WSUS/MECM/3rd party)' }
+        }
+        @{
+            id = 'Q-UnmanagedScan'
+            text = 'Are there devices on the network that carry no Defender sensor?'
+            info = 'Network appliances, OT equipment, contractor machines. They cannot be onboarded but they can still be scanned.'
+            type = 'radio'
+            answers = @(
+                @{ text = 'Yes, and they are covered by authenticated scanning'; value = 'pass' }
+                @{ text = 'Yes, and they are not assessed at all'; value = 'fail' }
+                @{ text = 'No, every device carries a sensor'; value = 'pass' }
+                @{ text = 'Not sure'; value = '' }
+            )
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Vulnerability Management Capability Review'; row = 'Authenticated scan for unmanaged devices' }
+        }
+        @{
+            id = 'Q-Firmware'
+            text = 'Which hardware makes up the estate, and is firmware part of the patch cycle?'
+            info = 'List the manufacturers and roughly how many of each - for example "Lenovo 800, HP 250". Firmware sits below the operating system and survives reimaging, so it is often missed entirely.'
+            type = 'text'
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Vulnerability Management Capability Review'; row = 'Firmware / hardware advisories' }
+        }
+
+        # ---------------------------------------------- Remediasyon performansi
+        @{
+            id = 'Q-MttrCritical'
+            text = 'How long does a critical vulnerability usually take to fix, from discovery to closed?'
+            info = 'An honest average in days. If it is not measured, say so rather than estimating.'
+            type = 'text'
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Remediation Performance'; row = 'Mean time to remediate — critical' }
+        }
+        @{
+            id = 'Q-MttrHigh'
+            text = 'And for a high severity vulnerability?'
+            info = 'Again in days, and again only if it is measured.'
+            type = 'text'
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Remediation Performance'; row = 'Mean time to remediate — high' }
+        }
+        @{
+            id = 'Q-OpenExceptions'
+            text = 'How many vulnerability exceptions are open at the moment?'
+            info = 'Accepted risks that remain unfixed. A number is enough.'
+            type = 'text'
+            target = @{ section = 'Vulnerability Management (TVM)'; table = 'Remediation Performance'; row = 'Open exceptions' }
+        }
     )
 }
