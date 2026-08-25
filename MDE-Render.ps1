@@ -617,14 +617,25 @@ if ($d.tables.agentVersions) {
                 param($rm)
                 if ($script:verIdx -ge $script:verRows.Count) { return $rm.Value }
                 $v = $script:verRows[$script:verIdx]; $script:verIdx++
-                $st = if ([int]$v.behind -eq 0) { 'pass' } elseif ([int]$v.behind -lt 20) { 'partial' } else { 'fail' }
+                # 'Latest available' Microsoft'un son surumu demek ve API'den okunamaz -
+                # toplayici oraya bir sey yazmaz. Behind = en yuksek gorulen surumde olmayan
+                # cihaz sayisi; sifir olmasi "guncel" demek DEGIL, "hepsi ayni surumde"
+                # demek, o yuzden en iyi ihtimalle partial.
+                $st = if ([int]$v.behind -eq 0) { 'partial' } elseif ([int]$v.behind -lt 20) { 'partial' } else { 'fail' }
+                $note = if ($v.observed) { $v.observed } else { '' }
+                if ($note) { $note += '. Fill Latest available from the Microsoft release notes to judge currency.' }
+                $noteCell = if ($note) { "<span class=`"draft`">$(Esc $note)</span>" } else { '' }
+                if ($note) { $script:draftCount++ }
+                $latestCell = if ($v.latest) { Esc $v.latest }
+                              elseif ($v.observed) { $script:draftCount++; "<span class=`"draft`">from Microsoft release notes</span>" }
+                              else { '' }
                 $script:filled.rows++
                 "<tr><td>$(Esc $v.component)</td>" +
                 "<td class=`"f`" contenteditable data-ph=`"––`">$(Esc $v.current)</td>" +
-                "<td class=`"f`" contenteditable data-ph=`"––`">$(Esc $v.latest)</td>" +
+                "<td class=`"f`" contenteditable data-ph=`"––`">$latestCell</td>" +
                 "<td class=`"num f`" contenteditable data-ph=`"––`">$($v.behind)</td>" +
                 "<td class=`"sel`">$(New-Select 'st' $ST_OPTS $st)</td>" +
-                "<td class=`"f`" contenteditable data-ph=`"––`"></td></tr>"
+                "<td class=`"f`" contenteditable data-ph=`"––`">$noteCell</td></tr>"
             })
             "$($m.Groups[1].Value)$body$($m.Groups[3].Value)"
         }, 1)
@@ -1954,7 +1965,8 @@ $note = @"
     <div class="eyebrow">Collector output</div>
     <h2>Automated Collection Notes</h2>
     <div class="rule"></div>
-    <p class="small mut">This page was added by MDE-Render.ps1. Delete it before issuing the report.</p>
+    <p class="small mut">This page was added by MDE-Render.ps1 and is not part of the report.</p>
+    <button type="button" class="pagedel" onclick="removePage(this)">Remove this page</button>
     <table class="t compact">
       <tbody>
         <tr><td style="width:30%"><b>Collected (UTC)</b></td><td>$(Esc $d.meta.generatedUtc)</td></tr>

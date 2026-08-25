@@ -274,6 +274,7 @@ body.nodata .datahint{display:none}
 
 /* ---------- Satir ekle / sil (yalnizca ekranda, baskida asla) ---------- */
 .rowctl{display:none}
+.pagedel{display:none}
 @media screen{
   body.rowtools .rowctl{display:inline-flex;align-items:center;justify-content:center}
   body.rowtools table.t tbody tr:hover{background:#FFF7E6}
@@ -287,6 +288,11 @@ body.nodata .datahint{display:none}
     cursor:pointer;user-select:none;
   }
   .rowctl.del:hover{background:#B3261E;color:#fff;border-color:#B3261E}
+  .pagedel{
+    display:inline-block;margin:0 0 10px;padding:5px 12px;border:1px solid #E3B7B1;
+    border-radius:5px;background:#FDEDEB;color:#B3261E;font:inherit;font-size:8.5pt;cursor:pointer;
+  }
+  .pagedel:hover{background:#B3261E;color:#fff;border-color:#B3261E}
   .rowctl.addrow{
     margin:4px 0 12px;padding:3px 10px;border:1px dashed #B9C2D0;border-radius:5px;
     background:#F7F9FC;color:#41506B;font-size:8.5pt;cursor:pointer;
@@ -2555,7 +2561,7 @@ function toggleToc(){document.getElementById('toc').classList.toggle('on');}
    Aksi halde her acilista cogalirlar. */
 function docHtml(){
   const c=document.getElementById('doc').cloneNode(true);
-  c.querySelectorAll('.rowctl').forEach(n=>n.remove());
+  c.querySelectorAll('.rowctl,.pagedel').forEach(n=>n.remove());
   return c.innerHTML;
 }
 function isDataRow(tr){
@@ -2648,6 +2654,12 @@ function buildRowTools(){
     tbl.insertAdjacentElement('afterend',btn);
   });
 }
+function removePage(btn){
+  const p=btn.closest('.page');
+  if(!p)return;
+  if(!confirm('Remove this page from the report? It is only in the browser copy; re-rendering brings it back.'))return;
+  p.remove();buildToc();updateDraftCount();save();
+}
 function toggleRowTools(){
   document.body.classList.toggle('rowtools');
   const on=document.body.classList.contains('rowtools');
@@ -2659,7 +2671,7 @@ function toggleRowTools(){
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-13-delbtn';
+const DOCVER='2026-08-13-pagedel';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
@@ -2691,7 +2703,7 @@ function saveHtml(){
   paintSelects();
   document.querySelectorAll('select').forEach(s=>[...s.options].forEach(o=>{o.selected=(o.value===s.value);o.toggleAttribute('selected',o.value===s.value);}));
   const clone=document.documentElement.cloneNode(true);
-  clone.querySelectorAll('#bar,#toc,.rowctl').forEach(n=>n.remove());
+  clone.querySelectorAll('#bar,#toc,.rowctl,.pagedel').forEach(n=>n.remove());
   clone.querySelectorAll('body').forEach(b=>b.classList.remove('rowtools'));
   const html='<!DOCTYPE html>\n'+clone.outerHTML;
   const blob=new Blob([html],{type:'text/html'});
