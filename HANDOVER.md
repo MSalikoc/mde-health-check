@@ -115,7 +115,7 @@ earlier handover had not spotted. `README.md` and `BASLA-WINDOWS.md` now send st
 `mde-data-collector`. `Test-Parse.ps1` stayed: it is byte-identical in both repos and globs whatever
 `.ps1` files are in the folder.
 
-**2026-08-09 (later)** — `MANUAL-FIELDS.md` was written, because "fill it in by hand" without a
+**2026-08-09 (later)** — `MANUAL-FIELDS.md` was written (since folded into `CONSULTANT-GUIDE.md`), because "fill it in by hand" without a
 written rule means a different answer every engagement. It defines the two cover KPIs that nothing
 computes (`Overall Maturity`, `Control Compliance`), the five maturity levels the template had only
 ever named, the severity and effort rubrics, the roadmap bands and the portal-only lookups.
@@ -202,12 +202,39 @@ collection - "Secure score control profiles were not readable" means the join di
 renderer works, but fields the collector now produces - `impact` on secure score actions, `risk` on
 exclusions - are absent from it and stay blank. That is expected, not a fault.
 
+**2026-08-19** — a real engagement showed which tables still came back empty, and the answer split
+three ways. Two were defects: the device inventory looked back 14 days, so a machine that stopped
+reporting a fortnight ago vanished from both the onboarded and the inactive counts and the onboarding
+gap read too small; and the version currency table filled "Latest available" with the highest build
+seen in the estate, which reads as fully patched when every device is a year behind. Both fixed in
+the collector.
+
+The rest were fields no API exposes, and the questionnaire grew from 26 questions to 52 to cover
+them: the SOC operating model, the response KPIs, notification and reporting governance, the
+vulnerability management practice questions, hardware manufacturers, and remediation performance.
+
+The vulnerability trend chart stays manual by decision, not oversight. Advanced Hunting keeps 30
+days, so there is no history to collect in any month; and its rows are labelled M1..M6, which gives
+the survey merge nothing to match on.
+
+Delivery was the other half of the day. The report printed badly because 23 of its 25 sections are
+taller than an A4 page - one over a metre - while the template gave each a fixed height and laid it
+out as a flex column, so Chrome had to break what it was told not to break. Sections are ordinary
+blocks in print now, and the footer that used to appear once per section repeats on every page.
+Colours washed out because the stylesheet never asked to keep them: `print-color-adjust` fixes it.
+`Save final` writes a locked copy for the client, and `ConvertTo-Final.ps1` does the same to a report
+rendered before that button existed, so hand edits survive.
+
+`CONSULTANT-GUIDE.md` replaces `MANUAL-FIELDS.md`: same rubrics, but organised around what the
+consultant actually does, and grounded in a measured inventory of what a rendered report still leaves
+blank rather than in recollection.
+
 ## Open items
 
-- **Align the renderer with `MANUAL-FIELDS.md`.** Replace the `Round($score/20)` band derivation with
-  the explicit bands, suppress the security-operations domain below 20 alerts, and settle the three
-  competing domain lists (Section 18 names nine, the chart plots eight, the renderer computes eight
-  under other names) on Section 18's list.
+- **Suppress the security-operations maturity domain below 20 alerts.** One unresolved alert
+  currently produces a domain score of 0, which drags the overall figure down on no evidence.
+- **Settle the three competing domain lists** - Section 18 names nine, the chart plots eight, the
+  renderer computes eight under other names - on Section 18's list.
 - **`sample-data.json` is schema v1.0 and no longer represents a real collection.** It has 5 tables
   where a real run has 15, and none of `secureConfiguration`, `findings` or `asrRules` — the richest
   sources. It renders (see trap 10) but exercises 18 charts / 28 KPIs / 79 rows against a real run's

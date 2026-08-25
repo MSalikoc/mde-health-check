@@ -62,7 +62,7 @@ function Esc([string]$s) { $s -replace '&', '&amp;' -replace '<', '&lt;' -replac
 # okumalari buradan gecer.
 function Rows($Table) { return @($Table | Where-Object { $null -ne $_ }) }
 
-# Alan puani (0-100) -> olgunluk seviyesi (1-5). Bantlar MANUAL-FIELDS.md'de tanimli;
+# Alan puani (0-100) -> olgunluk seviyesi (1-5). Bantlar CONSULTANT-GUIDE.md'de tanimli;
 # 95 ve 60 sinirlari checklist'in Compliant/Partial esikleriyle ayni olsun diye secildi.
 # BURADAN BASKA YERDE seviye hesaplamayin - grafik, tablo ve dokuman ayrilirsa rapor kendi
 # icinde celisir.
@@ -471,7 +471,7 @@ if ($d.tables.findings) {
         }
         # Due, toplayici doldurmadiysa raporun kendi severity tanimindan turer
         # (Bolum 01: Critical hemen, High 30 gun, Medium 90 gun, Low rutin is).
-        # Efor ve sahip bilerek bos birakilir - MANUAL-FIELDS.md'ye bakin.
+        # Efor ve sahip bilerek bos birakilir - CONSULTANT-GUIDE.md'ye bakin.
         $due = $f.due
         if (-not $due) {
             $base = try { [datetime]::Parse($d.meta.generatedUtc) } catch { Get-Date }
@@ -1666,7 +1666,7 @@ if ($five -and $five.Count) {
 
 # ============================================================================
 #  KAPAK KPI: OVERALL MATURITY ve CONTROL COMPLIANCE
-#  Ikisi de hicbir yerde hesaplanmiyordu; kurallari MANUAL-FIELDS.md'de yazili.
+#  Ikisi de hicbir yerde hesaplanmiyordu; kurallari CONSULTANT-GUIDE.md'de yazili.
 #  KPI regex pasindan (dosyanin basi) cok sonra calisiyoruz - checklist sonuclari
 #  ancak burada hazir - o yuzden iki kutuyu dogrudan hedefleyerek yaziyoruz.
 # ============================================================================
@@ -1687,7 +1687,7 @@ function Set-CoverKpi {
 }
 
 # Overall maturity: puani olan alanlarin ortalamasinin asagi yuvarlanmasi; herhangi bir
-# cekirdek alan seviye 1'deyse 3 ile sinirli (bkz. MANUAL-FIELDS.md).
+# cekirdek alan seviye 1'deyse 3 ile sinirli (bkz. CONSULTANT-GUIDE.md).
 if ($five -and $five.Count) {
     $core = @('Deployment & Onboarding','Next-Generation Protection','Attack Surface Reduction',
               'Vulnerability Management','EDR & Automation')
@@ -1714,7 +1714,7 @@ if ($five -and $five.Count) {
 }
 
 # Control compliance: uyumlu / degerlendirilen. "Not assessed" ve "N/A" paydaya girmez -
-# 110'a bolmek olculmemis satirlari basarisiz gostermek olur (bkz. MANUAL-FIELDS.md).
+# 110'a bolmek olculmemis satirlari basarisiz gostermek olur (bkz. CONSULTANT-GUIDE.md).
 if ($CHK -and $CHK.Count -gt 0) {
     $assessed = @($CHK.Values | Where-Object { $_.status -in 'pass','partial','fail' })
     if ($assessed.Count -gt 0) {

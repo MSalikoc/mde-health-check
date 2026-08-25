@@ -18,7 +18,7 @@ copy of them, so there is never a second, older collector to run by mistake.
 | `MDE-Health-Assessment-SAMPLE.html` | Version filled with sample data (fictional Contoso) |
 | `MDE-Health-Assessment-Template.docx` | Word version of the same report |
 | `sample-data.json` | For testing the renderer without a tenant |
-| `MANUAL-FIELDS.md` | **What goes in every blank field, and on what basis** — scoring rubrics, portal lookups |
+| `CONSULTANT-GUIDE.md` | **Read this before writing a report** — what is filled for you, what the customer answers, what is yours, and the scoring rules |
 | `New-Survey.ps1` | Builds the customer questionnaire for the fields no API exposes |
 | `survey-questions.psd1` | The questions themselves — edit here, not in the generator |
 | `BASLA-WINDOWS.md` | Short command sequence (Turkish) |
