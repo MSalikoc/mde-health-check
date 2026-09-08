@@ -119,10 +119,27 @@ function Set-Chart {
     else { $d.charts | Add-Member -NotePropertyName $Name -NotePropertyValue $Series -Force }
 }
 
+# Toplayici, sayilari calistigi makinenin yerel ayarina gore bicimlendiriyor:
+# Turkce Windows'ta 33426200 -> "33.426.200". Eski kod noktalari koruyup [double]'a
+# veriyordu ve render "Cannot convert value 33.426.200" ile tamamen duruyordu.
+# Hem nokta hem virgul, hem binlik hem ondalik olarak gelebilir; ayirt etme kurali:
+# ayractan sonra TAM 3 rakam varsa ve birden fazla grup varsa binlik ayracidir.
+function ConvertTo-Num {
+    param([string]$Text)
+    if (-not $Text) { return $null }
+    $t = ($Text -replace '[^\d,.\-]', '')
+    if (-not $t) { return $null }
+    if ($t -match '^-?\d{1,3}([.,]\d{3})+$') { $t = $t -replace '[.,]', '' }
+    else { $t = $t -replace ',', '.' }
+    $out = 0.0
+    if ([double]::TryParse($t, [Globalization.NumberStyles]::Float,
+                           [Globalization.CultureInfo]::InvariantCulture, [ref]$out)) { return $out }
+    return $null
+}
+
 function Kpi-Num {
     param([string]$Name)
-    $v = "$($d.kpi.$Name)" -replace '[^0-9.]', ''
-    if ($v) { [double]$v } else { $null }
+    ConvertTo-Num "$($d.kpi.$Name)"
 }
 
 # --- toplayicinin yanlis KPI'sindan dogan bulgulari ayikla ---
@@ -924,8 +941,8 @@ if ($d.meta.secureScore -or $d.kpi.'Secure score for devices') {
     if (-not $score) {
         $parts = $d.meta.secureScore -split '/'
         if ($parts.Count -eq 2) {
-            $cur = [double]($parts[0].Trim()); $max = [double]($parts[1].Trim())
-            if ($max -gt 0) { $score = [math]::Round(100 * $cur / $max) }
+            $cur = ConvertTo-Num $parts[0]; $max = ConvertTo-Num $parts[1]
+            if ($null -ne $cur -and $max -gt 0) { $score = [math]::Round(100 * $cur / $max) }
         }
     }
     $html = $html.Replace('<div class="bigscore"><span class="f" contenteditable data-ph="––"></span>',
