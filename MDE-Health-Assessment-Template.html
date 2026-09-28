@@ -2698,7 +2698,7 @@ function toggleRowTools(){
 const KEY='mde-assessment-v1';
 /* Belge sürümü: dosyayı elle değiştirdiğinizde bunu da değiştirin ki
    tarayıcıda kayıtlı eski kopya yeni dosyanın üzerine binmesin. */
-const DOCVER='2026-08-13-print';
+const DOCVER='2026-09-28-workingcopy';
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
@@ -2756,19 +2756,34 @@ function saveFinal(){
   a.href=URL.createObjectURL(blob);
   a.download='MDE-Assessment-final-'+new Date().toISOString().slice(0,10)+'.html';
   a.click();URL.revokeObjectURL(a.href);
+  dirtySinceSave=false;
 }
+/* Tarayici kapaninca is kaybi yasandi: localStorage her zaman guvenilir degil
+   (file:// kisitlari, "cikista site verilerini temizle" ayari, yeni render'da
+   degisen anahtar). Dosyaya kaydedilmemis degisiklik varken cikisi uyariyoruz. */
+let dirtySinceSave=false;
+document.addEventListener('input',e=>{ if(e.target.closest('#doc'))dirtySinceSave=true; });
+document.addEventListener('change',e=>{ if(e.target.closest('#doc'))dirtySinceSave=true; });
+window.addEventListener('beforeunload',e=>{
+  if(!dirtySinceSave)return;
+  e.preventDefault();e.returnValue='';
+});
+
 function saveHtml(){
   paintSelects();
   document.querySelectorAll('select').forEach(s=>[...s.options].forEach(o=>{o.selected=(o.value===s.value);o.toggleAttribute('selected',o.value===s.value);}));
+  // Calisma kopyasi toolbar'i KORUR. Eskiden #bar ve #toc de siliniyordu, yani
+  // kaydedilen dosyada ne kaydetme dugmesi ne onay sayaci kaliyordu - uzerinde
+  // calisilip tekrar kaydedilemiyordu. Musteriye giden kilitli kopya saveFinal().
   const clone=document.documentElement.cloneNode(true);
-  clone.querySelectorAll('#bar,#toc,.rowctl,.pagedel').forEach(n=>n.remove());
-  clone.querySelectorAll('body').forEach(b=>b.classList.remove('rowtools'));
+  clone.querySelectorAll('.rowctl,.pagedel').forEach(n=>n.remove());
   const html='<!DOCTYPE html>\n'+clone.outerHTML;
   const blob=new Blob([html],{type:'text/html'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download='MDE-Assessment-'+new Date().toISOString().slice(0,10)+'.html';
   a.click();URL.revokeObjectURL(a.href);
+  dirtySinceSave=false;
 }
 
 document.addEventListener('input',e=>{
